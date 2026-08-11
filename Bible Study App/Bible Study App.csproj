@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>Bible_Study_App</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\asv.json" Link="Data\asv.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\nasb1995.json" Link="Data\nasb1995.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\nasb1995.json')" />
+  </ItemGroup>
+
+</Project>

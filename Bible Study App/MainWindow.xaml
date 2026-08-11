@@ -1,0 +1,2936 @@
+<Window x:Class="Bible_Study_App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Bible_Study_App"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Bible Study Studio"
+        Height="820"
+        Width="1280"
+        MinHeight="720"
+        MinWidth="1080"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource AppBackground}"
+        FontFamily="Segoe UI">
+    <Window.Resources>
+        <SolidColorBrush x:Key="AppBackground" Color="#283618" />
+        <SolidColorBrush x:Key="SidebarBackground" Color="#1F2A14" />
+        <SolidColorBrush x:Key="PanelBackground" Color="#606C38" />
+        <SolidColorBrush x:Key="StrokeSoft" Color="#283618" />
+        <SolidColorBrush x:Key="TextPrimary" Color="#FEFAE0" />
+        <SolidColorBrush x:Key="TextSecondary" Color="#F1E7C5" />
+        <SolidColorBrush x:Key="TextMuted" Color="#D6C99D" />
+        <SolidColorBrush x:Key="Mint" Color="#DDA15E" />
+        <SolidColorBrush x:Key="Coral" Color="#BC6C25" />
+        <SolidColorBrush x:Key="Gold" Color="#DDA15E" />
+        <SolidColorBrush x:Key="Sky" Color="#FEFAE0" />
+        <SolidColorBrush x:Key="Violet" Color="#A98467" />
+
+        <Style TargetType="ContextMenu">
+            <Setter Property="Background" Value="{DynamicResource AppBackground}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="BorderBrush" Value="#111111" />
+            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="Padding" Value="6" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="{DynamicResource AppBackground}"
+                                BorderBrush="#111111"
+                                BorderThickness="1.5"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#000000"
+                                                  BlurRadius="0"
+                                                  ShadowDepth="5"
+                                                  Direction="315"
+                                                  Opacity="0.55" />
+                            </Border.Effect>
+                            <StackPanel IsItemsHost="True"
+                                        KeyboardNavigation.DirectionalNavigation="Cycle" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="MenuItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="MinWidth" Value="180" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter ContentSource="Header"
+                                                  RecognizesAccessKey="True"
+                                                  VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{TemplateBinding InputGestureText}"
+                                           Foreground="{DynamicResource TextMuted}"
+                                           FontSize="12"
+                                           Margin="18,0,0,0"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource PanelBackground}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="Separator">
+            <Setter Property="Margin" Value="8,5" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Separator">
+                        <Border Height="1"
+                                Background="{DynamicResource PanelBackground}"
+                                Opacity="0.75" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ScrollBarLineButtonStyle" TargetType="RepeatButton">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Border Background="Transparent" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ScrollBarPageButtonStyle" TargetType="RepeatButton">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Border Background="Transparent" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="VerticalScrollThumbStyle" TargetType="Thumb">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border x:Name="ThumbRoot"
+                                Margin="2"
+                                Background="{DynamicResource Mint}"
+                                CornerRadius="4"
+                                Opacity="0.95" />
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ThumbRoot" Property="Background" Value="{DynamicResource Mint}" />
+                                <Setter TargetName="ThumbRoot" Property="Opacity" Value="1" />
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="ThumbRoot" Property="Background" Value="{DynamicResource TextPrimary}" />
+                                <Setter TargetName="ThumbRoot" Property="Opacity" Value="1" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HorizontalScrollThumbStyle" TargetType="Thumb">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border x:Name="ThumbRoot"
+                                Margin="2"
+                                Background="{DynamicResource Mint}"
+                                CornerRadius="4"
+                                Opacity="0.95" />
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ThumbRoot" Property="Background" Value="{DynamicResource Mint}" />
+                                <Setter TargetName="ThumbRoot" Property="Opacity" Value="1" />
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="ThumbRoot" Property="Background" Value="{DynamicResource TextPrimary}" />
+                                <Setter TargetName="ThumbRoot" Property="Opacity" Value="1" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ScrollBar">
+            <Setter Property="Stylus.IsFlicksEnabled" Value="False" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid x:Name="Root"
+                              Background="Transparent"
+                              SnapsToDevicePixels="True">
+                            <Border x:Name="TrackBackground"
+                                    Background="{DynamicResource Mint}"
+                                    CornerRadius="6"
+                                    Opacity="0" />
+                            <Track x:Name="PART_Track"
+                                   IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource ScrollBarPageButtonStyle}"
+                                                  Command="ScrollBar.PageUpCommand" />
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb x:Name="ScrollThumb"
+                                           Style="{StaticResource VerticalScrollThumbStyle}"
+                                           Opacity="0" />
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource ScrollBarPageButtonStyle}"
+                                                  Command="ScrollBar.PageDownCommand" />
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Orientation" Value="Vertical">
+                                <Setter Property="Width" Value="12" />
+                                <Setter TargetName="PART_Track" Property="Orientation" Value="Vertical" />
+                            </Trigger>
+                            <Trigger Property="Orientation" Value="Horizontal">
+                                <Setter Property="Height" Value="12" />
+                                <Setter TargetName="PART_Track" Property="Orientation" Value="Horizontal" />
+                                <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False" />
+                                <Setter TargetName="TrackBackground" Property="CornerRadius" Value="6" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TrackBackground" Property="Background" Value="{DynamicResource Mint}" />
+                                <Setter TargetName="TrackBackground" Property="Opacity" Value="0.18" />
+                                <Setter TargetName="ScrollThumb" Property="Opacity" Value="1" />
+                            </Trigger>
+                            <Trigger Property="Tag" Value="Scrolling">
+                                <Setter TargetName="TrackBackground" Property="Background" Value="{DynamicResource Mint}" />
+                                <Setter TargetName="TrackBackground" Property="Opacity" Value="0.18" />
+                                <Setter TargetName="ScrollThumb" Property="Opacity" Value="1" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.25" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ChromeButtonStyle" TargetType="Button">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="14"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource PanelBackground}" />
+                                <Setter TargetName="Root" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <TranslateTransform Y="-1" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource AppBackground}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.42" />
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="NavButtonStyle" TargetType="Button" BasedOn="{StaticResource ChromeButtonStyle}">
+            <Setter Property="Height" Value="48" />
+            <Setter Property="Margin" Value="0,4" />
+            <Setter Property="Padding" Value="16,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+
+        <Style x:Key="ActiveNavButtonStyle" TargetType="Button" BasedOn="{StaticResource NavButtonStyle}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+
+        <Style x:Key="AccentButtonStyle" TargetType="Button" BasedOn="{StaticResource ChromeButtonStyle}">
+            <Setter Property="Foreground" Value="{DynamicResource AppBackground}" />
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#DDA15E" Offset="0" />
+                        <GradientStop Color="#FEFAE0" Offset="1" />
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="IconButtonStyle" TargetType="Button" BasedOn="{StaticResource ChromeButtonStyle}">
+            <Setter Property="MinWidth" Value="46" />
+            <Setter Property="Height" Value="46" />
+            <Setter Property="Padding" Value="12,0" />
+        </Style>
+
+        <Style x:Key="StrongsToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="MinWidth" Value="104" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Foreground" Value="{DynamicResource AppBackground}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Root"
+                                Background="{DynamicResource PanelBackground}"
+                                BorderBrush="#111111"
+                                BorderThickness="1"
+                                CornerRadius="17"
+                                Padding="6">
+                            <Grid>
+                                <TextBlock Text="Strong's"
+                                           Foreground="{TemplateBinding Foreground}"
+                                           FontSize="12"
+                                           FontWeight="Black"
+                                           VerticalAlignment="Center"
+                                           Margin="30,0,8,0" />
+                                <Border x:Name="Knob"
+                                        Width="22"
+                                        Height="22"
+                                        Background="{DynamicResource TextPrimary}"
+                                        BorderBrush="#111111"
+                                        BorderThickness="1"
+                                        CornerRadius="11"
+                                        HorizontalAlignment="Left">
+                                    <Border.RenderTransform>
+                                        <TranslateTransform x:Name="KnobTransform" X="0" />
+                                    </Border.RenderTransform>
+                                </Border>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Mint}" />
+                                <Setter TargetName="Knob" Property="Background" Value="{DynamicResource AppBackground}" />
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="KnobTransform"
+                                                             Storyboard.TargetProperty="X"
+                                                             To="70"
+                                                             Duration="0:0:0.18">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="KnobTransform"
+                                                             Storyboard.TargetProperty="X"
+                                                             To="0"
+                                                             Duration="0:0:0.18">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="RemoveButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinWidth" Value="34" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Background" Value="#F4A6A6" />
+            <Setter Property="Foreground" Value="{DynamicResource AppBackground}" />
+            <Setter Property="BorderBrush" Value="#8F2F2F" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontWeight" Value="Black" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#FFD0D0" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#E68181" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CardButtonStyle" TargetType="Button">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="18">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <TranslateTransform Y="-3" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <DataTemplate x:Key="BibleBookCardTemplate">
+            <Button Style="{DynamicResource PaperCardButtonStyle}"
+                    Click="BibleBook_Click"
+                    Tag="{Binding}"
+                    Margin="0,0,18,18">
+                <Grid Width="208"
+                      Height="138">
+                    <Border Background="#050505"
+                            BorderBrush="#050505"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Margin="0,10,10,0" />
+                    <Border x:Name="BibleBookPaperSheet"
+                            Width="196"
+                            Height="126"
+                            Background="{DynamicResource TextPrimary}"
+                            BorderBrush="#111111"
+                            BorderThickness="1.5"
+                            CornerRadius="4"
+                            Padding="16"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top">
+                        <Border.RenderTransform>
+                            <TranslateTransform x:Name="BibleBookPaperSheetTransform" />
+                        </Border.RenderTransform>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="1"
+                                       Text="{Binding Name}"
+                                       Foreground="#111111"
+                                       FontSize="18"
+                                       FontWeight="Black"
+                                       TextWrapping="Wrap"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="2"
+                                       Text="{Binding ChapterLabel}"
+                                       Foreground="{DynamicResource PanelBackground}"
+                                       FontSize="12" />
+                        </Grid>
+                    </Border>
+                </Grid>
+                <Button.Triggers>
+                    <EventTrigger RoutedEvent="MouseEnter">
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="BibleBookPaperSheetTransform"
+                                                 Storyboard.TargetProperty="X"
+                                                 To="6"
+                                                 Duration="0:0:0.12" />
+                                <DoubleAnimation Storyboard.TargetName="BibleBookPaperSheetTransform"
+                                                 Storyboard.TargetProperty="Y"
+                                                 To="-6"
+                                                 Duration="0:0:0.12" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                    <EventTrigger RoutedEvent="MouseLeave">
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="BibleBookPaperSheetTransform"
+                                                 Storyboard.TargetProperty="X"
+                                                 To="0"
+                                                 Duration="0:0:0.12" />
+                                <DoubleAnimation Storyboard.TargetName="BibleBookPaperSheetTransform"
+                                                 Storyboard.TargetProperty="Y"
+                                                 To="0"
+                                                 Duration="0:0:0.12" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                </Button.Triggers>
+            </Button>
+        </DataTemplate>
+
+        <Style x:Key="TestamentExpanderStyle" TargetType="Expander">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Expander">
+                        <StackPanel>
+                            <ToggleButton x:Name="HeaderButton"
+                                          IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Cursor="Hand"
+                                          Background="{DynamicResource AppBackground}"
+                                          BorderBrush="{DynamicResource Mint}"
+                                          BorderThickness="1"
+                                          Padding="16,12"
+                                          Margin="0,0,0,14">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Root"
+                                                Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                CornerRadius="7"
+                                                Padding="{TemplateBinding Padding}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <ContentPresenter VerticalAlignment="Center" />
+                                                <TextBlock x:Name="Chevron"
+                                                           Grid.Column="1"
+                                                           Text="v"
+                                                           Foreground="{DynamicResource Mint}"
+                                                           FontSize="16"
+                                                           FontWeight="Black"
+                                                           Margin="18,0,0,0"
+                                                           VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Root" Property="Background" Value="#344622" />
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="False">
+                                                <Setter TargetName="Chevron" Property="Text" Value="&gt;" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                                <ContentPresenter ContentSource="Header" />
+                            </ToggleButton>
+                            <Border x:Name="ExpandSite"
+                                    ClipToBounds="True"
+                                    Opacity="0"
+                                    RenderTransformOrigin="0.5,0">
+                                <Border.LayoutTransform>
+                                    <ScaleTransform x:Name="ExpandSiteScale"
+                                                    ScaleY="0" />
+                                </Border.LayoutTransform>
+                                <ContentPresenter />
+                            </Border>
+                        </StackPanel>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PaperCardButtonStyle" TargetType="Button">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CrumbButtonStyle" TargetType="Button">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <ContentPresenter />
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource Mint}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource PanelBackground}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource PanelBackground}" />
+                                <Setter Property="Foreground" Value="{DynamicResource Mint}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBackground}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="10,0,28,0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="ToggleButton"
+                                          Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                          Padding="{TemplateBinding Padding}"
+                                          ClickMode="Press"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Root"
+                                                Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                CornerRadius="8">
+                                            <Grid>
+                                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                                  HorizontalAlignment="Left"
+                                                                  VerticalAlignment="Center"
+                                                                  RecognizesAccessKey="True" />
+                                                <TextBlock Text="v"
+                                                           Foreground="{DynamicResource TextSecondary}"
+                                                           FontWeight="Bold"
+                                                           HorizontalAlignment="Right"
+                                                           VerticalAlignment="Center"
+                                                           Margin="0,0,10,0" />
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource PanelBackground}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <ContentPresenter x:Name="ContentSite"
+                                              IsHitTestVisible="False"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                              Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Left"
+                                              VerticalAlignment="Center" />
+
+                            <Popup x:Name="Popup"
+                                   Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Slide">
+                                <Border Background="{DynamicResource AppBackground}"
+                                        BorderBrush="{DynamicResource StrokeSoft}"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        MinWidth="{TemplateBinding ActualWidth}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <ScrollViewer>
+                                        <ItemsPresenter />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Background="{DynamicResource AppBackground}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="SidebarColumn" Width="284" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border x:Name="SidebarRoot"
+                Grid.Column="0"
+                Background="{DynamicResource SidebarBackground}"
+                BorderBrush="#111111"
+                BorderThickness="0,0,2,0"
+                Padding="22"
+                Loaded="SidebarRoot_Loaded">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Canvas x:Name="NavTabIndicatorLayer"
+                        Grid.RowSpan="3"
+                        Panel.ZIndex="0"
+                        IsHitTestVisible="False">
+                    <Border x:Name="NavTabIndicator"
+                            Width="240"
+                            Height="48"
+                            Background="{DynamicResource PanelBackground}"
+                            BorderBrush="{DynamicResource Mint}"
+                            BorderThickness="1"
+                            CornerRadius="14"
+                            Opacity="1" />
+                </Canvas>
+
+                <StackPanel Panel.ZIndex="1">
+                    <Grid Margin="0,0,0,30">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="SidebarToggleButton"
+                                Style="{StaticResource IconButtonStyle}"
+                                Background="{DynamicResource AppBackground}"
+                                HorizontalAlignment="Right"
+                                Click="SidebarToggle_Click"
+                                ToolTip="Collapse sidebar">
+                            <Grid Width="16" Height="14">
+                                <Border Height="2"
+                                        Background="{DynamicResource TextPrimary}"
+                                        VerticalAlignment="Top"
+                                        CornerRadius="1" />
+                                <Border Height="2"
+                                        Background="{DynamicResource TextPrimary}"
+                                        VerticalAlignment="Center"
+                                        CornerRadius="1" />
+                                <Border Height="2"
+                                        Background="{DynamicResource TextPrimary}"
+                                        VerticalAlignment="Bottom"
+                                        CornerRadius="1" />
+                            </Grid>
+                        </Button>
+                    </Grid>
+
+                    <Button x:Name="BibleStudyNavButton"
+                            Style="{StaticResource ActiveNavButtonStyle}"
+                            PreviewMouseLeftButtonDown="SidebarNavButton_PreviewMouseLeftButtonDown"
+                            Click="BibleStudyNav_Click">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="BibleStudyNavText"
+                                       Text="Bible Study"
+                                       VerticalAlignment="Center"
+                                       FontSize="14" />
+                        </Grid>
+                    </Button>
+
+                    <Button x:Name="TodayNavButton"
+                            Style="{StaticResource NavButtonStyle}"
+                            PreviewMouseLeftButtonDown="SidebarNavButton_PreviewMouseLeftButtonDown"
+                            Click="TodayDashboard_Click">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="StudyNotesNavText"
+                                       Text="Today"
+                                       VerticalAlignment="Center"
+                                       FontSize="14" />
+                        </Grid>
+                    </Button>
+
+                    <Button x:Name="SettingsNavButton"
+                            Style="{StaticResource NavButtonStyle}"
+                            PreviewMouseLeftButtonDown="SidebarNavButton_PreviewMouseLeftButtonDown"
+                            Click="Settings_Click">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="SettingsNavText"
+                                       Text="Settings"
+                                       VerticalAlignment="Center"
+                                       FontSize="14" />
+                        </Grid>
+                    </Button>
+
+                    <Button x:Name="PrayerBoardNavButton" Style="{StaticResource NavButtonStyle}" IsEnabled="False">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="PrayerBoardNavText"
+                                       Text="Prayer Board"
+                                       VerticalAlignment="Center"
+                                       FontSize="14" />
+                        </Grid>
+                    </Button>
+
+                    <Button x:Name="ReadingPlanNavButton" Style="{StaticResource NavButtonStyle}" IsEnabled="False">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="ReadingPlanNavText"
+                                       Text="Reading Plan"
+                                       VerticalAlignment="Center"
+                                       FontSize="14" />
+                        </Grid>
+                    </Button>
+
+                    <Button x:Name="ResourceLibraryNavButton" Style="{StaticResource NavButtonStyle}" IsEnabled="False">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="ResourceLibraryNavText"
+                                       Text="Resource Library"
+                                       VerticalAlignment="Center"
+                                       FontSize="14" />
+                        </Grid>
+                    </Button>
+                </StackPanel>
+
+            </Grid>
+        </Border>
+
+        <Grid x:Name="MainContentRoot"
+              Grid.Column="1"
+              Margin="28"
+              ClipToBounds="True">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Margin="0,0,0,22">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="HeaderBackButton"
+                            Style="{StaticResource IconButtonStyle}"
+                            Background="{DynamicResource PanelBackground}"
+                            Click="BackOneLevel_Click"
+                            ToolTip="Back"
+                            Visibility="Collapsed"
+                            Margin="0,1,14,0">
+                        <TextBlock Text="&lt;"
+                                   FontSize="18"
+                                   FontWeight="Bold" />
+                    </Button>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock x:Name="MainHeading"
+                                   Text="Bible Study"
+                                   Foreground="{DynamicResource TextPrimary}"
+                                   FontSize="32"
+                                   FontWeight="Black" />
+                        <TextBlock x:Name="MainSubheading"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Margin="0,4,0,0"
+                                   Visibility="Collapsed" />
+                        <StackPanel x:Name="BreadcrumbTrail"
+                                    Orientation="Horizontal"
+                                    Margin="0,8,0,0" />
+                    </StackPanel>
+                </Grid>
+
+                <Border x:Name="WorkspaceStatusCard"
+                        Grid.Column="1"
+                        Background="{DynamicResource PanelBackground}"
+                        BorderBrush="{DynamicResource StrokeSoft}"
+                        BorderThickness="1"
+                        CornerRadius="20"
+                        Padding="18,12"
+                        VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Library"
+                                   Foreground="{DynamicResource Gold}"
+                                   FontWeight="Bold"
+                                   Margin="0,0,10,0" />
+                        <TextBlock x:Name="WorkspaceCountText"
+                                   Text="66 books ready"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="PassagePickerCard"
+                        Grid.Column="1"
+                        Background="{DynamicResource AppBackground}"
+                        BorderBrush="{DynamicResource StrokeSoft}"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="10"
+                        VerticalAlignment="Center"
+                        Visibility="Collapsed">
+                    <Grid VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Passage"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,10,0" />
+                        <ComboBox x:Name="StartChapterSelect"
+                                  Grid.Column="1"
+                                  Width="58"
+                                  Background="{DynamicResource PanelBackground}"
+                                  Foreground="{DynamicResource TextPrimary}"
+                                  BorderBrush="{DynamicResource StrokeSoft}"
+                                  SelectionChanged="PassageSelection_Changed" />
+                        <ComboBox x:Name="StartVerseSelect"
+                                  Grid.Column="2"
+                                  Width="58"
+                                  Margin="6,0,0,0"
+                                  Background="{DynamicResource PanelBackground}"
+                                  Foreground="{DynamicResource TextPrimary}"
+                                  BorderBrush="{DynamicResource StrokeSoft}"
+                                  SelectionChanged="PassageSelection_Changed" />
+                        <TextBlock Text="to"
+                                   Grid.Column="3"
+                                   Foreground="{DynamicResource TextMuted}"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Margin="10,0" />
+                        <ComboBox x:Name="EndChapterSelect"
+                                  Grid.Column="4"
+                                  Width="58"
+                                  Background="{DynamicResource PanelBackground}"
+                                  Foreground="{DynamicResource TextPrimary}"
+                                  BorderBrush="{DynamicResource StrokeSoft}"
+                                  SelectionChanged="PassageSelection_Changed" />
+                        <ComboBox x:Name="EndVerseSelect"
+                                  Grid.Column="5"
+                                  Width="58"
+                                  Margin="6,0,0,0"
+                                  Background="{DynamicResource PanelBackground}"
+                                  Foreground="{DynamicResource TextPrimary}"
+                                  BorderBrush="{DynamicResource StrokeSoft}"
+                                  SelectionChanged="PassageSelection_Changed" />
+                        <TextBlock x:Name="PassagePreviewText"
+                                   Grid.Column="7"
+                                   Foreground="{DynamicResource Mint}"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   Margin="12,0,0,0" />
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Border x:Name="ContentShell"
+                    Grid.Row="1"
+                    Background="{DynamicResource PanelBackground}"
+                    BorderBrush="{DynamicResource StrokeSoft}"
+                    BorderThickness="1"
+                    CornerRadius="28"
+                    Padding="24">
+                <Grid>
+                    <Grid x:Name="TodayPanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <ScrollViewer x:Name="TodayScrollViewer"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      PreviewMouseWheel="TodayScrollViewer_PreviewMouseWheel">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1.05*" />
+                                    <ColumnDefinition Width="32" />
+                                    <ColumnDefinition Width="0.95*" />
+                                </Grid.ColumnDefinitions>
+
+                            <Border Background="{DynamicResource AppBackground}"
+                                    BorderBrush="{DynamicResource StrokeSoft}"
+                                    BorderThickness="1"
+                                    CornerRadius="22"
+                                    Padding="18">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+                                    <Grid Margin="0,0,0,14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Edited Studies"
+                                                       Foreground="{DynamicResource TextPrimary}"
+                                                       FontSize="18"
+                                                       FontWeight="Bold" />
+                                        <TextBlock Text="Files touched today, grouped by the study they belong to."
+                                                   Foreground="{DynamicResource TextSecondary}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,5,0,0" />
+                                        </StackPanel>
+                                        <Border Grid.Column="1"
+                                                Background="{DynamicResource PanelBackground}"
+                                                CornerRadius="14"
+                                                Padding="12,8"
+                                                VerticalAlignment="Top"
+                                                Margin="12,0,0,0">
+                                            <TextBlock x:Name="TodayEditedCountText"
+                                                       Foreground="{DynamicResource Mint}"
+                                                       FontWeight="SemiBold" />
+                                        </Border>
+                                    </Grid>
+
+                                    <Grid Grid.Row="1">
+                                        <TextBlock x:Name="EmptyTodayText"
+                                                   Text="No studies edited today yet."
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   FontSize="17"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                      HorizontalScrollBarVisibility="Disabled">
+                                            <ItemsControl x:Name="TodayEditedItems">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Button Style="{StaticResource CardButtonStyle}"
+                                                                Click="TodayStudy_Click"
+                                                                Tag="{Binding Study}"
+                                                                Margin="0,0,0,12">
+                                                            <Border Background="{DynamicResource PanelBackground}"
+                                                                    BorderBrush="{DynamicResource StrokeSoft}"
+                                                                    BorderThickness="1"
+                                                                    CornerRadius="16"
+                                                                    Padding="16">
+                                                                <Grid>
+                                                                    <Grid.RowDefinitions>
+                                                                        <RowDefinition Height="Auto" />
+                                                                        <RowDefinition Height="Auto" />
+                                                                        <RowDefinition Height="Auto" />
+                                                                    </Grid.RowDefinitions>
+                                                                    <TextBlock Text="{Binding StudyName}"
+                                                                               Foreground="{DynamicResource TextPrimary}"
+                                                                               FontSize="18"
+                                                                               FontWeight="Black"
+                                                                               TextWrapping="Wrap" />
+                                                                    <TextBlock Grid.Row="1"
+                                                                               Text="{Binding LocationLabel}"
+                                                                               Foreground="{DynamicResource TextSecondary}"
+                                                                               Margin="0,6,0,0"
+                                                                               TextWrapping="Wrap" />
+                                                                    <Grid Grid.Row="2"
+                                                                          Margin="0,12,0,0">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="*" />
+                                                                            <ColumnDefinition Width="Auto" />
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Text="{Binding PassageLabel}"
+                                                                                  Foreground="{DynamicResource Mint}"
+                                                                                  FontWeight="SemiBold"
+                                                                                  TextWrapping="Wrap" />
+                                                                        <StackPanel Grid.Column="1"
+                                                                                    Orientation="Horizontal"
+                                                                                    Margin="14,0,0,0">
+                                                                            <TextBlock Text="{Binding LastEditedLabel}"
+                                                                                       Foreground="{DynamicResource TextMuted}"
+                                                                                       FontSize="12"
+                                                                                       VerticalAlignment="Center" />
+                                                                            <Button Style="{StaticResource RemoveButtonStyle}"
+                                                                                    Margin="8,0,0,0"
+                                                                                    VerticalAlignment="Center"
+                                                                                    Tag="{Binding ContextKey}"
+                                                                                    ToolTip="Remove from AI context"
+                                                                                    Click="RemoveTodayEditedStudyContext_Click">
+                                                                                <TextBlock Text="X"
+                                                                                           FontSize="12"
+                                                                                           FontWeight="Black" />
+                                                                            </Button>
+                                                                        </StackPanel>
+                                                                    </Grid>
+                                                                </Grid>
+                                                            </Border>
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+
+                            <Border Grid.Column="1"
+                                    Width="1"
+                                    Background="{DynamicResource Mint}"
+                                    Opacity="0.65"
+                                    Margin="15,4" />
+
+                            <StackPanel Grid.Column="2">
+                                <Border Background="{DynamicResource AppBackground}"
+                                        BorderBrush="{DynamicResource StrokeSoft}"
+                                        BorderThickness="1"
+                                        CornerRadius="22"
+                                        Padding="18"
+                                        Margin="0,0,0,18">
+                                    <StackPanel>
+                                        <TextBlock Text="Details For The Day"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   FontSize="18"
+                                                   FontWeight="Bold" />
+                                        <Grid Margin="0,12,0,0">
+                                            <TextBox x:Name="DailyDetailsTextBox"
+                                                     TextWrapping="Wrap"
+                                                     AcceptsReturn="True"
+                                                     MinHeight="120"
+                                                     Background="{DynamicResource PanelBackground}"
+                                                     BorderBrush="{DynamicResource StrokeSoft}"
+                                                     BorderThickness="1"
+                                                     Foreground="{DynamicResource TextPrimary}"
+                                                     CaretBrush="{DynamicResource Mint}"
+                                                     Padding="12"
+                                                     TextChanged="DailyDetails_TextChanged" />
+                                            <TextBlock x:Name="DailyDetailsPlaceholderText"
+                                                       Text="Add information about your life right now so it can be taken into account when sending you messages"
+                                                       Foreground="{DynamicResource TextMuted}"
+                                                       Margin="13,10,13,0"
+                                                       TextWrapping="Wrap"
+                                                       IsHitTestVisible="False" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Background="{DynamicResource AppBackground}"
+                                        BorderBrush="{DynamicResource StrokeSoft}"
+                                        BorderThickness="1"
+                                        CornerRadius="22"
+                                        Padding="18">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+                                        <Grid Margin="0,0,0,14">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="Scheduled Messages"
+                                                           Foreground="{DynamicResource TextPrimary}"
+                                                           FontSize="18"
+                                                           FontWeight="Bold" />
+                                                <TextBlock x:Name="ScheduledNotificationSummaryText"
+                                                           Foreground="{DynamicResource TextSecondary}"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,5,0,0" />
+                                            </StackPanel>
+                                            <Button x:Name="CancelScheduledNotificationsButton"
+                                                    Grid.Column="1"
+                                                    Style="{StaticResource ChromeButtonStyle}"
+                                                    Padding="12,8"
+                                                    Margin="12,0,0,0"
+                                                    VerticalAlignment="Top"
+                                                    IsEnabled="False"
+                                                    Click="CancelScheduledNotifications_Click"
+                                                    Content="Cancel scheduled" />
+                                        </Grid>
+                                        <TextBlock x:Name="EmptyScheduledNotificationText"
+                                                   Grid.Row="1"
+                                                   Text="No scheduled messages saved."
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,0,0,10" />
+                                        <ScrollViewer x:Name="ScheduledMessagesScrollViewer"
+                                                      Grid.Row="2"
+                                                      MaxHeight="340"
+                                                      VerticalScrollBarVisibility="Auto"
+                                                      HorizontalScrollBarVisibility="Disabled"
+                                                      PreviewMouseWheel="ScheduledMessagesScrollViewer_PreviewMouseWheel">
+                                            <ItemsControl x:Name="ScheduledNotificationItems">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{DynamicResource PanelBackground}"
+                                                                BorderBrush="{DynamicResource StrokeSoft}"
+                                                                BorderThickness="1"
+                                                                CornerRadius="14"
+                                                                Padding="12"
+                                                                Margin="0,0,0,10">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <StackPanel>
+                                                                    <TextBlock Text="{Binding Title}"
+                                                                               Foreground="{DynamicResource TextPrimary}"
+                                                                               FontWeight="Bold"
+                                                                               TextWrapping="Wrap" />
+                                                                    <TextBlock Text="{Binding Detail}"
+                                                                               Foreground="{DynamicResource TextSecondary}"
+                                                                               TextWrapping="Wrap"
+                                                                               Margin="0,4,0,0" />
+                                                                </StackPanel>
+                                                                <TextBlock Grid.Column="1"
+                                                                           Text="{Binding StatusLabel}"
+                                                                           Foreground="{Binding StatusBrush}"
+                                                                           FontWeight="Bold"
+                                                                           FontSize="12"
+                                                                           Margin="12,2,0,0" />
+                                                                <Button Grid.Column="2"
+                                                                        Style="{StaticResource RemoveButtonStyle}"
+                                                                        Margin="8,0,0,0"
+                                                                        VerticalAlignment="Top"
+                                                                        Visibility="{Binding RemoveVisibility}"
+                                                                        Tag="{Binding SequenceId}"
+                                                                        ToolTip="Remove deleted message"
+                                                                        Click="RemoveDeletedScheduledNotification_Click">
+                                                                    <TextBlock Text="X"
+                                                                               FontSize="12"
+                                                                               FontWeight="Black" />
+                                                                </Button>
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Grid>
+                                </Border>
+                                </StackPanel>
+                            </Grid>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Grid x:Name="ReminderSettingsPanel" Visibility="Collapsed">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel MaxWidth="940"
+                                        HorizontalAlignment="Stretch">
+                                <CheckBox x:Name="RemindersEnabledCheckBox"
+                                          Content="Follow-up reminders active"
+                                          IsChecked="True"
+                                          Foreground="{DynamicResource TextPrimary}"
+                                          FontWeight="SemiBold"
+                                          Margin="0,0,0,18"
+                                          Checked="ReminderSettings_Changed"
+                                          Unchecked="ReminderSettings_Changed" />
+
+                                <StackPanel Margin="0,0,0,18">
+                                    <CheckBox x:Name="OverviewNotificationEnabledCheckBox"
+                                              Content="Send study overview"
+                                              IsChecked="True"
+                                              Foreground="{DynamicResource TextPrimary}"
+                                              FontWeight="SemiBold"
+                                              Checked="ReminderSettings_Changed"
+                                              Unchecked="ReminderSettings_Changed" />
+                                    <TextBox x:Name="OverviewPromptTextBox"
+                                             TextWrapping="Wrap"
+                                             AcceptsReturn="True"
+                                             MinHeight="74"
+                                             Background="{DynamicResource AppBackground}"
+                                             BorderBrush="{DynamicResource StrokeSoft}"
+                                             Foreground="{DynamicResource TextPrimary}"
+                                             CaretBrush="{DynamicResource Mint}"
+                                             Padding="12"
+                                             Margin="0,10,0,0"
+                                             TextChanged="ReminderSettingsTextBox_TextChanged" />
+                                </StackPanel>
+
+                                <Grid Margin="0,0,0,16">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox x:Name="ReminderPresetSelect"
+                                              DisplayMemberPath="Name"
+                                              SelectionChanged="ReminderPresetSelect_SelectionChanged"
+                                              Margin="0,0,10,10" />
+                                    <TextBox x:Name="NewReminderPresetNameTextBox"
+                                             Grid.Column="1"
+                                             Background="{DynamicResource AppBackground}"
+                                             BorderBrush="{DynamicResource StrokeSoft}"
+                                             Foreground="{DynamicResource TextPrimary}"
+                                             CaretBrush="{DynamicResource Mint}"
+                                             Padding="10"
+                                             Margin="0,0,0,10" />
+                                    <StackPanel Grid.Row="1"
+                                                Grid.ColumnSpan="2"
+                                                Orientation="Horizontal">
+                                        <Button Style="{StaticResource ChromeButtonStyle}"
+                                                Padding="12,8"
+                                                Margin="0,0,8,0"
+                                                Click="ApplyReminderPreset_Click">
+                                            <TextBlock Text="Activate" />
+                                        </Button>
+                                        <Button Style="{StaticResource AccentButtonStyle}"
+                                                Padding="12,8"
+                                                Margin="0,0,8,0"
+                                                Click="SaveReminderPreset_Click">
+                                            <TextBlock Text="Save default" />
+                                        </Button>
+                                        <Button Style="{StaticResource ChromeButtonStyle}"
+                                                Padding="12,8"
+                                                Click="AddReminder_Click">
+                                            <TextBlock Text="Add reminder" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock x:Name="ReminderCountText"
+                                           Foreground="{DynamicResource TextMuted}"
+                                           FontWeight="SemiBold"
+                                           Margin="0,0,0,10" />
+
+                                <ItemsControl x:Name="ReminderScheduleItems">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{DynamicResource StrokeSoft}"
+                                                    BorderThickness="0,1,0,0"
+                                                    Padding="0,12,0,12">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="76" />
+                                                        <ColumnDefinition Width="132" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBox Text="{Binding DelayAmount, UpdateSourceTrigger=PropertyChanged}"
+                                                             Background="{DynamicResource AppBackground}"
+                                                             BorderBrush="{DynamicResource StrokeSoft}"
+                                                             Foreground="{DynamicResource TextPrimary}"
+                                                             CaretBrush="{DynamicResource Mint}"
+                                                             Padding="10"
+                                                             Margin="0,0,8,0"
+                                                             VerticalAlignment="Top" />
+                                                    <ComboBox Grid.Column="1"
+                                                              SelectedValue="{Binding DelayUnit, UpdateSourceTrigger=PropertyChanged}"
+                                                              SelectedValuePath="Content"
+                                                              Margin="0,0,8,0"
+                                                              VerticalAlignment="Top">
+                                                        <ComboBoxItem Content="minutes" />
+                                                        <ComboBoxItem Content="hours" />
+                                                        <ComboBoxItem Content="days" />
+                                                    </ComboBox>
+                                                    <TextBox Grid.Column="2"
+                                                             Text="{Binding Prompt, UpdateSourceTrigger=PropertyChanged}"
+                                                             TextWrapping="Wrap"
+                                                             AcceptsReturn="True"
+                                                             MinHeight="42"
+                                                             Background="{DynamicResource AppBackground}"
+                                                             BorderBrush="{DynamicResource StrokeSoft}"
+                                                             Foreground="{DynamicResource TextPrimary}"
+                                                             CaretBrush="{DynamicResource Mint}"
+                                                             Padding="10"
+                                                             Margin="0,0,8,0" />
+                                                    <Button Grid.Column="3"
+                                                            Style="{StaticResource RemoveButtonStyle}"
+                                                            Width="44"
+                                                            Height="36"
+                                                            Click="RemoveReminder_Click"
+                                                            Tag="{Binding}"
+                                                            ToolTip="Remove reminder">
+                                                        <TextBlock Text="x"
+                                                                   FontWeight="Black" />
+                                                    </Button>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Grid x:Name="SettingsPanel" Visibility="Collapsed">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel MaxWidth="760"
+                                        HorizontalAlignment="Left">
+                                <Button Cursor="Hand"
+                                        Background="{DynamicResource PanelBackground}"
+                                        BorderBrush="{DynamicResource Mint}"
+                                        BorderThickness="1"
+                                        Padding="16"
+                                        HorizontalContentAlignment="Stretch"
+                                        Click="ColorThemeSettings_Click">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="Root"
+                                                    Background="{TemplateBinding Background}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    CornerRadius="8"
+                                                    Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                                  VerticalAlignment="Center" />
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Root" Property="Background" Value="{DynamicResource PanelBackground}" />
+                                                    <Setter TargetName="Root" Property="Opacity" Value="0.9" />
+                                                </Trigger>
+                                                <Trigger Property="IsPressed" Value="True">
+                                                    <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource TextPrimary}" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid Width="42"
+                                              Height="42"
+                                              Margin="0,0,14,0">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="*" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Background="#F7C8D0"
+                                                    CornerRadius="7,0,0,0" />
+                                            <Border Grid.Column="1"
+                                                    Background="#BDE4CF"
+                                                    CornerRadius="0,7,0,0" />
+                                            <Border Grid.Row="1"
+                                                    Background="#C9D7F8"
+                                                    CornerRadius="0,0,0,7" />
+                                            <Border Grid.Row="1"
+                                                    Grid.Column="1"
+                                                    Background="#F8E7A8"
+                                                    CornerRadius="0,0,7,0" />
+                                        </Grid>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="Color Theme"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   FontSize="18"
+                                                   FontWeight="Black"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="2"
+                                                   Text=">"
+                                                   Foreground="{DynamicResource TextSecondary}"
+                                                   FontSize="24"
+                                                   FontWeight="Black"
+                                                   VerticalAlignment="Center" />
+                                    </Grid>
+                                </Button>
+
+                                <Button Cursor="Hand"
+                                        Background="{DynamicResource PanelBackground}"
+                                        BorderBrush="{DynamicResource Mint}"
+                                        BorderThickness="1"
+                                        Padding="16"
+                                        Margin="0,12,0,0"
+                                        HorizontalContentAlignment="Stretch"
+                                        Click="ReminderSettings_Click">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="Root"
+                                                    Background="{TemplateBinding Background}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    CornerRadius="8"
+                                                    Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                                  VerticalAlignment="Center" />
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Root" Property="Opacity" Value="0.9" />
+                                                </Trigger>
+                                                <Trigger Property="IsPressed" Value="True">
+                                                    <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource TextPrimary}" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid Width="42"
+                                              Height="42"
+                                              Margin="0,0,14,0">
+                                            <Border Background="#F8E7A8"
+                                                    CornerRadius="8" />
+                                            <Border Width="24"
+                                                    Height="5"
+                                                    Background="#F7C8D0"
+                                                    CornerRadius="3"
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Top"
+                                                    Margin="0,11,0,0" />
+                                            <Border Width="24"
+                                                    Height="5"
+                                                    Background="#BDE4CF"
+                                                    CornerRadius="3"
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center" />
+                                            <Border Width="24"
+                                                    Height="5"
+                                                    Background="#C9D7F8"
+                                                    CornerRadius="3"
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Bottom"
+                                                    Margin="0,0,0,11" />
+                                        </Grid>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="Reminder Settings"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   FontSize="18"
+                                                   FontWeight="Black"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="2"
+                                                   Text=">"
+                                                   Foreground="{DynamicResource TextSecondary}"
+                                                   FontSize="24"
+                                                   FontWeight="Black"
+                                                   VerticalAlignment="Center" />
+                                    </Grid>
+                                </Button>
+
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Grid x:Name="ColorThemeSettingsPanel" Visibility="Collapsed">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel MaxWidth="760"
+                                        HorizontalAlignment="Left">
+                                    <TextBlock Text="Pick a saved scheme or create a custom one."
+                                               Foreground="{DynamicResource TextSecondary}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,22" />
+
+                                    <ItemsControl x:Name="ColorSchemePresetItems"
+                                                  Margin="0,0,0,24">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{DynamicResource AppBackground}"
+                                                    BorderBrush="{DynamicResource PanelBackground}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="7"
+                                                    Padding="12"
+                                                    Margin="0,0,0,10">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="180" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Name}"
+                                                               Foreground="{DynamicResource TextPrimary}"
+                                                               FontWeight="Black"
+                                                               VerticalAlignment="Center"
+                                                               TextWrapping="Wrap" />
+                                                    <Grid Grid.Column="1"
+                                                          Height="30"
+                                                          Margin="12,0">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Background="{Binding AppBackgroundBrush}"
+                                                                CornerRadius="5,0,0,5" />
+                                                        <Border Grid.Column="1"
+                                                                Background="{Binding PanelBackgroundBrush}" />
+                                                        <Border Grid.Column="2"
+                                                                Background="{Binding AccentBrush}" />
+                                                        <Border Grid.Column="3"
+                                                                Background="{Binding TextPrimaryBrush}" />
+                                                        <Border Grid.Column="4"
+                                                                Background="{Binding TextSecondaryBrush}"
+                                                                CornerRadius="0,5,5,0" />
+                                                    </Grid>
+                                                    <Button Grid.Column="2"
+                                                            Style="{StaticResource ChromeButtonStyle}"
+                                                            Padding="14,8"
+                                                            Margin="0,0,8,0"
+                                                            Tag="{Binding}"
+                                                            Click="ApplyColorScheme_Click"
+                                                            Content="Apply" />
+                                                    <Button Grid.Column="3"
+                                                            Style="{StaticResource RemoveButtonStyle}"
+                                                            Width="70"
+                                                            Height="34"
+                                                            Tag="{Binding}"
+                                                            Click="DeleteColorScheme_Click"
+                                                            Content="Delete" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                    <TextBlock Text="New preset"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="17"
+                                               FontWeight="Bold"
+                                               Margin="0,8,0,12" />
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="NewColorSchemeNameTextBox"
+                                                 Background="{DynamicResource AppBackground}"
+                                                 BorderBrush="{DynamicResource PanelBackground}"
+                                                 Foreground="{DynamicResource TextPrimary}"
+                                                 CaretBrush="{DynamicResource Mint}"
+                                                 Padding="10"
+                                                 Margin="0,0,10,0"
+                                                 Text="Custom" />
+                                        <Button Grid.Column="1"
+                                                Style="{StaticResource AccentButtonStyle}"
+                                                Padding="18,8"
+                                                Click="AddColorScheme_Click"
+                                                Content="Add preset" />
+                                    </Grid>
+
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150" />
+                                            <ColumnDefinition Width="170" />
+                                            <ColumnDefinition Width="180" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="App background"
+                                                   Foreground="{DynamicResource TextSecondary}"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center" />
+                                        <Button Grid.Column="1"
+                                                Style="{StaticResource ChromeButtonStyle}"
+                                                Padding="8"
+                                                Margin="0,0,10,0"
+                                                Tag="{Binding ElementName=NewAppBackgroundTextBox}"
+                                                Click="PickColor_Click">
+                                            <Border x:Name="NewAppBackgroundSwatch"
+                                                    Width="130"
+                                                    Height="28"
+                                                    CornerRadius="5"
+                                                    Background="#283618" />
+                                        </Button>
+                                        <TextBox x:Name="NewAppBackgroundTextBox"
+                                                 Grid.Column="2"
+                                                 Background="{DynamicResource AppBackground}"
+                                                 BorderBrush="{DynamicResource PanelBackground}"
+                                                 Foreground="{DynamicResource TextPrimary}"
+                                                 CaretBrush="{DynamicResource Mint}"
+                                                 Padding="10"
+                                                 Text="#283618"
+                                                 TextChanged="ColorHex_TextChanged" />
+                                    </Grid>
+
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150" />
+                                            <ColumnDefinition Width="170" />
+                                            <ColumnDefinition Width="180" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Panel background"
+                                                   Foreground="{DynamicResource TextSecondary}"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center" />
+                                        <Button Grid.Column="1"
+                                                Style="{StaticResource ChromeButtonStyle}"
+                                                Padding="8"
+                                                Margin="0,0,10,0"
+                                                Tag="{Binding ElementName=NewPanelBackgroundTextBox}"
+                                                Click="PickColor_Click">
+                                            <Border x:Name="NewPanelBackgroundSwatch"
+                                                    Width="130"
+                                                    Height="28"
+                                                    CornerRadius="5"
+                                                    Background="#606C38" />
+                                        </Button>
+                                        <TextBox x:Name="NewPanelBackgroundTextBox"
+                                                 Grid.Column="2"
+                                                 Background="{DynamicResource AppBackground}"
+                                                 BorderBrush="{DynamicResource PanelBackground}"
+                                                 Foreground="{DynamicResource TextPrimary}"
+                                                 CaretBrush="{DynamicResource Mint}"
+                                                 Padding="10"
+                                                 Text="#606C38"
+                                                 TextChanged="ColorHex_TextChanged" />
+                                    </Grid>
+
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150" />
+                                            <ColumnDefinition Width="170" />
+                                            <ColumnDefinition Width="180" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Accent"
+                                                   Foreground="{DynamicResource TextSecondary}"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center" />
+                                        <Button Grid.Column="1"
+                                                Style="{StaticResource ChromeButtonStyle}"
+                                                Padding="8"
+                                                Margin="0,0,10,0"
+                                                Tag="{Binding ElementName=NewAccentTextBox}"
+                                                Click="PickColor_Click">
+                                            <Border x:Name="NewAccentSwatch"
+                                                    Width="130"
+                                                    Height="28"
+                                                    CornerRadius="5"
+                                                    Background="#DDA15E" />
+                                        </Button>
+                                        <TextBox x:Name="NewAccentTextBox"
+                                                 Grid.Column="2"
+                                                 Background="{DynamicResource AppBackground}"
+                                                 BorderBrush="{DynamicResource PanelBackground}"
+                                                 Foreground="{DynamicResource TextPrimary}"
+                                                 CaretBrush="{DynamicResource Mint}"
+                                                 Padding="10"
+                                                 Text="#DDA15E"
+                                                 TextChanged="ColorHex_TextChanged" />
+                                    </Grid>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150" />
+                                            <ColumnDefinition Width="170" />
+                                            <ColumnDefinition Width="180" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Text"
+                                                   Foreground="{DynamicResource TextSecondary}"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center" />
+                                        <Button Grid.Column="1"
+                                                Style="{StaticResource ChromeButtonStyle}"
+                                                Padding="8"
+                                                Margin="0,0,10,0"
+                                                Tag="{Binding ElementName=NewTextPrimaryTextBox}"
+                                                Click="PickColor_Click">
+                                            <Border x:Name="NewTextPrimarySwatch"
+                                                    Width="130"
+                                                    Height="28"
+                                                    CornerRadius="5"
+                                                    Background="#FEFAE0" />
+                                        </Button>
+                                        <TextBox x:Name="NewTextPrimaryTextBox"
+                                                 Grid.Column="2"
+                                                 Background="{DynamicResource AppBackground}"
+                                                 BorderBrush="{DynamicResource PanelBackground}"
+                                                 Foreground="{DynamicResource TextPrimary}"
+                                                 CaretBrush="{DynamicResource Mint}"
+                                                 Padding="10"
+                                                 Text="#FEFAE0"
+                                                 TextChanged="ColorHex_TextChanged" />
+                                        </Grid>
+                                    </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Grid x:Name="LibraryPanel">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Margin="0,0,0,18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="All Bible Books"
+                                           Foreground="{DynamicResource TextPrimary}"
+                                           FontSize="24"
+                                           FontWeight="Bold" />
+                                <TextBlock Text="Choose a book to open its study workspace."
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           Margin="0,6,0,0" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+                                <Border Background="{DynamicResource PanelBackground}"
+                                        CornerRadius="14"
+                                        Padding="12,8"
+                                        Margin="0,0,8,0">
+                                    <TextBlock Text="Old Testament"
+                                               Foreground="{DynamicResource Gold}"
+                                               FontWeight="SemiBold" />
+                                </Border>
+                                <Border Background="{DynamicResource PanelBackground}"
+                                        CornerRadius="14"
+                                        Padding="12,8">
+                                    <TextBlock Text="New Testament"
+                                               Foreground="{DynamicResource Sky}"
+                                               FontWeight="SemiBold" />
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+
+                        <ScrollViewer x:Name="BibleBooksScrollViewer"
+                                      Grid.Row="1"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      PreviewMouseWheel="BibleBooksScrollViewer_PreviewMouseWheel">
+                            <StackPanel>
+                                <Expander x:Name="OldTestamentBooksExpander"
+                                          Style="{StaticResource TestamentExpanderStyle}"
+                                          IsExpanded="True"
+                                          Loaded="TestamentBooksExpander_Loaded"
+                                          Expanded="TestamentBooksExpander_StateChanged"
+                                          Collapsed="TestamentBooksExpander_StateChanged"
+                                          Margin="0,0,0,18"
+                                          Foreground="{DynamicResource TextPrimary}">
+                                    <Expander.Header>
+                                        <TextBlock Text="Old Testament"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   FontSize="18"
+                                                   FontWeight="Black"
+                                                   Margin="0,0,0,10" />
+                                    </Expander.Header>
+                                    <ItemsControl x:Name="OldTestamentBooksItems"
+                                                  ItemTemplate="{StaticResource BibleBookCardTemplate}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </Expander>
+
+                                <Expander x:Name="NewTestamentBooksExpander"
+                                          Style="{StaticResource TestamentExpanderStyle}"
+                                          IsExpanded="True"
+                                          Loaded="TestamentBooksExpander_Loaded"
+                                          Expanded="TestamentBooksExpander_StateChanged"
+                                          Collapsed="TestamentBooksExpander_StateChanged"
+                                          Foreground="{DynamicResource TextPrimary}">
+                                    <Expander.Header>
+                                        <TextBlock Text="New Testament"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   FontSize="18"
+                                                   FontWeight="Black"
+                                                   Margin="0,0,0,10" />
+                                    </Expander.Header>
+                                    <ItemsControl x:Name="NewTestamentBooksItems"
+                                                  ItemTemplate="{StaticResource BibleBookCardTemplate}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </Expander>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Grid x:Name="WorkspacePanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Margin="0,0,0,18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Button Style="{StaticResource IconButtonStyle}"
+                                    Background="{DynamicResource PanelBackground}"
+                                    Click="BackOneLevel_Click"
+                                    ToolTip="Back">
+                                <TextBlock Text="&lt;"
+                                           FontSize="18"
+                                           FontWeight="Bold" />
+                            </Button>
+                            <StackPanel Grid.Column="1"
+                                        Margin="14,0,0,0"
+                                        VerticalAlignment="Center">
+                                <TextBlock x:Name="WorkspaceTitle"
+                                         
+                                           FontSize="27"
+                                           FontWeight="Black" />
+                                <TextBlock x:Name="WorkspaceSubtitle"
+                                           Margin="0,6,0,0" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+                                <Button Style="{StaticResource ChromeButtonStyle}"
+                                        Background="{DynamicResource PanelBackground}"
+                                        Click="AddFolder_Click"
+                                        Height="50"
+                                        Padding="18,0"
+                                        Margin="0,0,8,0"
+                                        ToolTip="Create folder">
+                                    <TextBlock Text="Add Folder"
+                                               FontWeight="Bold" />
+                                </Button>
+                                <Button Style="{StaticResource AccentButtonStyle}"
+                                        Click="AddStudy_Click"
+                                        Height="50"
+                                        Padding="18,0"
+                                        ToolTip="Create study">
+                                    <TextBlock Text="Add Study"
+                                               FontWeight="Black" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Grid.Row="1"
+                                Background="{DynamicResource AppBackground}"
+                                BorderBrush="{DynamicResource StrokeSoft}"
+                                BorderThickness="1"
+                                CornerRadius="22"
+                                Padding="20">
+                            <Grid>
+                                <TextBlock x:Name="EmptyWorkspaceText"
+                                           Text="Use the plus button to add a folder or study."
+                                           Foreground="{DynamicResource TextMuted}"
+                                           FontSize="18"
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+
+                                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsControl x:Name="WorkspaceItems">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Style="{StaticResource PaperCardButtonStyle}"
+                                                        Click="WorkspaceItem_Click"
+                                                        Tag="{Binding}"
+                                                        Margin="0,0,18,18">
+                                                    <Grid Width="208"
+                                                          Height="138">
+                                                        <Border Background="#050505"
+                                                                BorderBrush="#050505"
+                                                                BorderThickness="1"
+                                                                CornerRadius="4"
+                                                                Margin="0,10,10,0" />
+                                                        <Border x:Name="PaperSheet"
+                                                                Width="196"
+                                                                Height="126"
+                                                                Background="{DynamicResource TextPrimary}"
+                                                                BorderBrush="#111111"
+                                                                BorderThickness="1.5"
+                                                                CornerRadius="4"
+                                                                Padding="16"
+                                                                HorizontalAlignment="Right"
+                                                                VerticalAlignment="Top">
+                                                            <Border.RenderTransform>
+                                                                <TranslateTransform x:Name="PaperSheetTransform" />
+                                                            </Border.RenderTransform>
+                                                            <Grid>
+                                                                <Grid.RowDefinitions>
+                                                                    <RowDefinition Height="Auto" />
+                                                                    <RowDefinition Height="*" />
+                                                                    <RowDefinition Height="Auto" />
+                                                                </Grid.RowDefinitions>
+                                                                <TextBlock Text="{Binding KindLabel}"
+                                                                           Foreground="#111111"
+                                                                           FontSize="12"
+                                                                           FontWeight="Bold"
+                                                                           Margin="0,0,0,8" />
+                                                                <Grid Grid.Row="1"
+                                                                      VerticalAlignment="Center">
+                                                                    <TextBlock Text="{Binding Name}"
+                                                                               Visibility="{Binding DisplayNameVisibility}"
+                                                                               Foreground="#111111"
+                                                                               FontSize="18"
+                                                                               FontWeight="Black"
+                                                                               TextWrapping="Wrap"
+                                                                               VerticalAlignment="Center" />
+                                                                    <TextBox Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                             Tag="{Binding}"
+                                                                             Visibility="{Binding RenameTextBoxVisibility}"
+                                                                             Background="{DynamicResource TextPrimary}"
+                                                                             BorderBrush="#111111"
+                                                                             BorderThickness="1"
+                                                                             Foreground="#111111"
+                                                                             CaretBrush="#111111"
+                                                                             FontSize="18"
+                                                                             FontWeight="Black"
+                                                                             Padding="8,4"
+                                                                             MinHeight="34"
+                                                                             MaxLength="80"
+                                                                             Loaded="WorkspaceRenameTextBox_Loaded"
+                                                                             PreviewMouseDown="WorkspaceRenameTextBox_PreviewMouseDown"
+                                                                             PreviewKeyDown="WorkspaceRenameTextBox_PreviewKeyDown"
+                                                                             LostKeyboardFocus="WorkspaceRenameTextBox_LostKeyboardFocus" />
+                                                                </Grid>
+                                                                <TextBlock Grid.Row="2"
+                                                                           Text="{Binding DetailLabel}"
+                                                                           Foreground="{DynamicResource PanelBackground}"
+                                                                           FontSize="12" />
+                                                            </Grid>
+                                                        </Border>
+                                                    </Grid>
+                                                    <Button.Triggers>
+                                                        <EventTrigger RoutedEvent="MouseEnter">
+                                                            <BeginStoryboard>
+                                                                <Storyboard>
+                                                                    <DoubleAnimation Storyboard.TargetName="PaperSheetTransform"
+                                                                                     Storyboard.TargetProperty="X"
+                                                                                     To="6"
+                                                                                     Duration="0:0:0.12" />
+                                                                    <DoubleAnimation Storyboard.TargetName="PaperSheetTransform"
+                                                                                     Storyboard.TargetProperty="Y"
+                                                                                     To="-6"
+                                                                                     Duration="0:0:0.12" />
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
+                                                        <EventTrigger RoutedEvent="MouseLeave">
+                                                            <BeginStoryboard>
+                                                                <Storyboard>
+                                                                    <DoubleAnimation Storyboard.TargetName="PaperSheetTransform"
+                                                                                     Storyboard.TargetProperty="X"
+                                                                                     To="0"
+                                                                                     Duration="0:0:0.12" />
+                                                                    <DoubleAnimation Storyboard.TargetName="PaperSheetTransform"
+                                                                                     Storyboard.TargetProperty="Y"
+                                                                                     To="0"
+                                                                                     Duration="0:0:0.12" />
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
+                                                    </Button.Triggers>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <Grid x:Name="StudyPanel" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition x:Name="StudyEditorColumn" Width="*" MinWidth="240" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition x:Name="ScriptureColumn" Width="360" MinWidth="280" MaxWidth="900" />
+                            <ColumnDefinition x:Name="StrongsSplitterColumn" Width="0" />
+                            <ColumnDefinition x:Name="StrongsColumn" Width="0" MinWidth="0" MaxWidth="520" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <ScrollViewer x:Name="StudyEditorScrollViewer"
+                                      Grid.Row="0"
+                                      Grid.Column="0"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      PreviewMouseWheel="StudyEditorScrollViewer_PreviewMouseWheel">
+                            <ItemsControl x:Name="StudyBlockItems"
+                                          Margin="4,0,24,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{Binding BackgroundBrush}"
+                                                BorderBrush="{Binding BorderBrush}"
+                                                BorderThickness="{Binding BorderThickness}"
+                                                Padding="{Binding Padding}"
+                                                Margin="{Binding Margin}"
+                                                MinHeight="{Binding MinHeight}"
+                                                CornerRadius="10">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="{Binding MarkerWidth}" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <TextBlock Text="{Binding MarkerText}"
+                                                           Visibility="{Binding MarkerVisibility}"
+                                                           Foreground="{Binding MarkerBrush}"
+                                                           FontSize="{Binding MarkerFontSize}"
+                                                           FontWeight="Bold"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Top"
+                                                           Margin="0,-2,10,0" />
+
+                                                <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                          Visibility="{Binding CheckboxVisibility}"
+                                                          HorizontalAlignment="Center"
+                                                          VerticalAlignment="Top"
+                                                          Margin="0,3,10,0"
+                                                          Checked="StudyBlock_CheckChanged"
+                                                          Unchecked="StudyBlock_CheckChanged" />
+
+                                                <TextBox Grid.Column="1"
+                                                         Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         Tag="{Binding}"
+                                                         AcceptsReturn="True"
+                                                         TextWrapping="Wrap"
+                                                         BorderThickness="0"
+                                                        Background="Transparent"
+                                                        Foreground="{Binding ForegroundBrush}"
+                                                        CaretBrush="Transparent"
+                                                         FontSize="{Binding FontSize}"
+                                                         FontWeight="{Binding FontWeight}"
+                                                         FontStyle="{Binding FontStyle}"
+                                                         FontFamily="{Binding FontFamily}"
+                                                         Padding="0"
+                                                         MinHeight="{Binding TextMinHeight}"
+                                                         SpellCheck.IsEnabled="True"
+                                                         UndoLimit="80"
+                                                        TextChanged="StudyBlock_TextChanged"
+                                                        SelectionChanged="StudyBlock_SelectionChanged"
+                                                        PreviewKeyDown="StudyBlock_PreviewKeyDown"
+                                                         KeyUp="StudyBlock_KeyUp"
+                                                         GotKeyboardFocus="StudyBlock_GotKeyboardFocus"
+                                                         LostKeyboardFocus="StudyBlock_LostKeyboardFocus">
+                                                    <TextBox.Template>
+                                                        <ControlTemplate TargetType="TextBox">
+                                                            <ScrollViewer x:Name="PART_ContentHost" />
+                                                        </ControlTemplate>
+                                                    </TextBox.Template>
+                                                </TextBox>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <Canvas x:Name="StudyEditorCaretLayer"
+                                Grid.Row="0"
+                                Grid.Column="0"
+                                Panel.ZIndex="25"
+                                IsHitTestVisible="False"
+                                ClipToBounds="True"
+                                Margin="4,0,24,0">
+                            <Border x:Name="SmoothEditorCaret"
+                                    Width="2.25"
+                                    Height="20"
+                                    Background="{DynamicResource Mint}"
+                                    CornerRadius="1.2"
+                                    Visibility="Collapsed" />
+                        </Canvas>
+
+                        <Border Grid.Column="0"
+                                Grid.Row="1"
+                                Background="{DynamicResource AppBackground}"
+                                BorderBrush="{DynamicResource StrokeSoft}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="10"
+                                Margin="4,12,14,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Button x:Name="EndStudyNotificationButton"
+                                        Grid.Column="1"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        Click="EndStudyNotification_Click"
+                                        HorizontalAlignment="Right"
+                                        Padding="14,9"
+                                        ToolTip="Send the enabled overview and schedule enabled reminders">
+                                    <TextBlock Text="End study for now and initiate notifications"
+                                               TextWrapping="Wrap"
+                                               MaxWidth="260" />
+                                </Button>
+                            </Grid>
+                        </Border>
+
+                        <GridSplitter x:Name="ScriptureColumnSplitter"
+                                      Grid.Column="1"
+                                      Grid.Row="0"
+                                      Grid.RowSpan="2"
+                                      Width="10"
+                                      HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Stretch"
+                                      Background="Transparent"
+                                      ShowsPreview="False"
+                                      ResizeBehavior="PreviousAndNext"
+                                      ResizeDirection="Columns"
+                                      DragCompleted="ScriptureColumnSplitter_DragCompleted"
+                                      ToolTip="Drag to resize scripture panel">
+                            <GridSplitter.Template>
+                                <ControlTemplate TargetType="GridSplitter">
+                                    <Border Background="Transparent">
+                                        <Border x:Name="ResizeStripe"
+                                                Width="2"
+                                                Background="{DynamicResource Coral}"
+                                                Opacity="0"
+                                                HorizontalAlignment="Center"
+                                                Margin="0,8" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="ResizeStripe" Property="Opacity" Value="0.65" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </GridSplitter.Template>
+                        </GridSplitter>
+
+                        <Button x:Name="ScripturePanelShowButton"
+                                Grid.Column="0"
+                                Grid.Row="0"
+                                Panel.ZIndex="20"
+                                Style="{StaticResource ChromeButtonStyle}"
+                                Background="{DynamicResource Mint}"
+                                Foreground="{DynamicResource AppBackground}"
+                                Padding="12,8"
+                                MinWidth="72"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Top"
+                                Margin="0,0,18,0"
+                                Visibility="Collapsed"
+                                Click="ScripturePanelToggle_Click"
+                                ToolTip="Show scripture panel">
+                            <TextBlock x:Name="ScripturePanelShowButtonText"
+                                       Text="Show"
+                                       TextWrapping="Wrap"
+                                       FontSize="12"
+                                       FontWeight="Black" />
+                        </Button>
+
+                        <Border x:Name="ScripturePanelRoot"
+                                Grid.Column="2"
+                                Grid.Row="0"
+                                Grid.RowSpan="2"
+                                Background="{DynamicResource TextPrimary}"
+                                BorderBrush="#111111"
+                                BorderThickness="1.5"
+                                CornerRadius="4"
+                                Padding="16"
+                                Margin="0,0,0,0"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform x:Name="ScripturePanelScale"
+                                                    ScaleX="1"
+                                                    ScaleY="1" />
+                                    <RotateTransform x:Name="ScripturePanelRotate"
+                                                     Angle="0" />
+                                </TransformGroup>
+                            </Border.RenderTransform>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button x:Name="ScripturePreviousChapterButton"
+                                            Grid.Column="0"
+                                            Style="{StaticResource ChromeButtonStyle}"
+                                            Background="{DynamicResource Mint}"
+                                            Foreground="{DynamicResource AppBackground}"
+                                            MinWidth="38"
+                                            Padding="10,8"
+                                            Margin="0,0,10,0"
+                                            Click="ScripturePreviousChapter_Click"
+                                            ToolTip="Previous chapter">
+                                        <TextBlock Text="&lt;"
+                                                   FontSize="14"
+                                                   FontWeight="Black" />
+                                    </Button>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock x:Name="ScripturePanelTitle"
+                                                   Text="ASV"
+                                                   Foreground="#111111"
+                                                   FontSize="20"
+                                                   FontWeight="Black"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock x:Name="ScripturePanelSubtitle"
+                                                   Text="Selected chapter"
+                                                   Foreground="{DynamicResource PanelBackground}"
+                                                   FontSize="12"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,4,0,0"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <Button x:Name="ScriptureNextChapterButton"
+                                            Grid.Column="2"
+                                            Style="{StaticResource ChromeButtonStyle}"
+                                            Background="{DynamicResource Mint}"
+                                            Foreground="{DynamicResource AppBackground}"
+                                            MinWidth="38"
+                                            Padding="10,8"
+                                            Margin="10,0,0,0"
+                                            Click="ScriptureNextChapter_Click"
+                                            ToolTip="Next chapter">
+                                        <TextBlock Text="&gt;"
+                                                   FontSize="14"
+                                                   FontWeight="Black" />
+                                    </Button>
+                                    <Button x:Name="ScripturePanelToggleButton"
+                                            Grid.Column="4"
+                                            Style="{StaticResource ChromeButtonStyle}"
+                                            Background="{DynamicResource Mint}"
+                                            Foreground="{DynamicResource AppBackground}"
+                                            Click="ScripturePanelToggle_Click"
+                                            MinWidth="42"
+                                            Padding="10,8"
+                                            Margin="10,0,0,0"
+                                            ToolTip="Hide scripture panel">
+                                        <TextBlock x:Name="ScripturePanelToggleButtonText"
+                                                   Text="Hide"
+                                                   FontSize="12"
+                                                   FontWeight="Black"
+                                                   TextWrapping="Wrap" />
+                                    </Button>
+                                    <ToggleButton x:Name="StrongsToggleButton"
+                                                  Grid.Column="3"
+                                                  Style="{StaticResource StrongsToggleStyle}"
+                                                  Margin="10,0,0,0"
+                                                  Checked="StrongsToggle_Changed"
+                                                  Unchecked="StrongsToggle_Changed"
+                                                  ToolTip="Show Strong's tagging for available New Testament data" />
+                                    <Border Grid.Row="1"
+                                            Grid.ColumnSpan="5"
+                                            Height="1"
+                                            Background="{DynamicResource Mint}"
+                                            Margin="0,12,0,0" />
+                                    <StackPanel Grid.Row="2"
+                                                Grid.ColumnSpan="5"
+                                                Orientation="Horizontal"
+                                                VerticalAlignment="Center"
+                                                Margin="0,10,0,0">
+                                        <TextBlock Text="Font"
+                                                   Foreground="{DynamicResource PanelBackground}"
+                                                   FontSize="12"
+                                                   FontWeight="Black"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,8,0" />
+                                        <Slider x:Name="ScriptureFontSizeSlider"
+                                                Width="140"
+                                                Minimum="12"
+                                                Maximum="24"
+                                                Value="16"
+                                                TickFrequency="1"
+                                                IsSnapToTickEnabled="True"
+                                                VerticalAlignment="Center"
+                                                ValueChanged="ScriptureFontSizeSlider_ValueChanged" />
+                                        <TextBlock x:Name="ScriptureFontSizeText"
+                                                   Text="16"
+                                                   Foreground="{DynamicResource AppBackground}"
+                                                   FontSize="12"
+                                                   FontWeight="Black"
+                                                   VerticalAlignment="Center"
+                                                   Margin="8,0,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid Grid.Row="1">
+                                    <TextBlock x:Name="ScriptureMissingText"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource PanelBackground}"
+                                               FontWeight="SemiBold"
+                                               Visibility="Collapsed"
+                                               VerticalAlignment="Center"
+                                               TextAlignment="Center" />
+                                    <ScrollViewer x:Name="ScriptureScrollViewer"
+                                                  VerticalScrollBarVisibility="Auto"
+                                                  HorizontalScrollBarVisibility="Disabled"
+                                                  ScrollChanged="ScriptureScrollViewer_ScrollChanged"
+                                                  SizeChanged="ScriptureScrollViewer_SizeChanged"
+                                                  PreviewMouseWheel="ScriptureScrollViewer_PreviewMouseWheel">
+                                        <RichTextBox x:Name="ScriptureTextView"
+                                                     IsReadOnly="True"
+                                                     IsDocumentEnabled="True"
+                                                     IsReadOnlyCaretVisible="False"
+                                                     BorderThickness="0"
+                                                     Background="Transparent"
+                                                     Foreground="#111111"
+                                                     SelectionBrush="{DynamicResource Mint}"
+                                                     SelectionOpacity="0.72"
+                                                     Cursor="IBeam"
+                                                     FocusVisualStyle="{x:Null}"
+                                                     Padding="0"
+                                                     FontSize="{Binding Value, ElementName=ScriptureFontSizeSlider}">
+                                            <FlowDocument x:Name="ScriptureDocument"
+                                                          PagePadding="0"
+                                                          FontFamily="Segoe UI"
+                                                          FontSize="{Binding Value, ElementName=ScriptureFontSizeSlider}"
+                                                          TextAlignment="Left" />
+                                        </RichTextBox>
+                                    </ScrollViewer>
+                                    <Canvas x:Name="ScriptureSelectionRail"
+                                            Width="12"
+                                            HorizontalAlignment="Right"
+                                            Margin="0,6,2,6"
+                                            IsHitTestVisible="False"
+                                            Visibility="Collapsed">
+                                        <Border x:Name="ScriptureSelectionMarker"
+                                                Width="12"
+                                                MinHeight="18"
+                                                Background="{DynamicResource Mint}"
+                                                BorderBrush="#111111"
+                                                BorderThickness="1"
+                                                CornerRadius="3"
+                                                Visibility="Collapsed" />
+                                    </Canvas>
+                                </Grid>
+                            </Grid>
+                        </Border>
+
+                        <GridSplitter x:Name="StrongsColumnSplitter"
+                                      Grid.Column="3"
+                                      Grid.Row="0"
+                                      Grid.RowSpan="2"
+                                      Width="8"
+                                      HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Stretch"
+                                      Background="Transparent"
+                                      ShowsPreview="False"
+                                      ResizeBehavior="PreviousAndNext"
+                                      ResizeDirection="Columns"
+                                      DragCompleted="StrongsColumnSplitter_DragCompleted"
+                                      Visibility="Collapsed"
+                                      ToolTip="Drag to resize Strong's panel">
+                            <GridSplitter.Template>
+                                <ControlTemplate TargetType="GridSplitter">
+                                    <Border Background="Transparent">
+                                        <Border x:Name="ResizeStripe"
+                                                Width="2"
+                                                Background="{DynamicResource Coral}"
+                                                Opacity="0"
+                                                HorizontalAlignment="Center"
+                                                Margin="0,8" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="ResizeStripe" Property="Opacity" Value="0.65" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </GridSplitter.Template>
+                        </GridSplitter>
+
+                        <Border x:Name="StrongsPanelRoot"
+                                Grid.Column="4"
+                                Grid.Row="0"
+                                Grid.RowSpan="2"
+                                Background="{DynamicResource TextPrimary}"
+                                BorderBrush="#111111"
+                                BorderThickness="1.5"
+                                CornerRadius="4"
+                                Padding="16"
+                                Margin="10,0,0,0"
+                                Opacity="0"
+                                Visibility="Collapsed">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Strong's"
+                                                   Foreground="#111111"
+                                                   FontSize="20"
+                                                   FontWeight="Black" />
+                                        <TextBlock x:Name="StrongsPanelReferenceText"
+                                                   Text="Select a tagged word"
+                                                   Foreground="{DynamicResource PanelBackground}"
+                                                   FontSize="12"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,4,0,0"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1"
+                                            Style="{StaticResource RemoveButtonStyle}"
+                                            Width="42"
+                                            Height="30"
+                                            Click="CloseStrongsPanel_Click"
+                                            ToolTip="Close Strong's panel">
+                                        <TextBlock Text="X"
+                                                   FontWeight="Black"
+                                                   FontSize="12" />
+                                    </Button>
+                                </Grid>
+                                <ScrollViewer x:Name="StrongsScrollViewer"
+                                              Grid.Row="1"
+                                              Margin="0,16,0,0"
+                                              VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled"
+                                              PreviewMouseWheel="StrongsScrollViewer_PreviewMouseWheel">
+                                    <StackPanel x:Name="StrongsContentStack">
+                                        <Border x:Name="StrongsWordSection"
+                                                Background="{DynamicResource TextSecondary}"
+                                                BorderBrush="#111111"
+                                                BorderThickness="1"
+                                                CornerRadius="4"
+                                                Padding="10"
+                                                Margin="0,0,0,10">
+                                            <StackPanel>
+                                                <TextBlock Text="WORD"
+                                                           Foreground="{DynamicResource PanelBackground}"
+                                                           FontSize="11"
+                                                           FontWeight="Black" />
+                                                <TextBlock x:Name="StrongsGreekText"
+                                                           Text="No word selected yet."
+                                                           Foreground="#111111"
+                                                           FontSize="22"
+                                                           FontWeight="Black"
+                                                           Margin="0,5,0,0"
+                                                           TextWrapping="Wrap" />
+                                                <TextBlock x:Name="StrongsEnglishText"
+                                                           Foreground="{DynamicResource AppBackground}"
+                                                           FontSize="14"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,8,0,0"
+                                                           TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border x:Name="StrongsNumberSection"
+                                                Background="{DynamicResource TextSecondary}"
+                                                BorderBrush="{DynamicResource Mint}"
+                                                BorderThickness="1"
+                                                CornerRadius="4"
+                                                Padding="10"
+                                                Margin="0,0,0,10">
+                                            <StackPanel>
+                                                <TextBlock Text="STRONG'S"
+                                                           Foreground="{DynamicResource PanelBackground}"
+                                                           FontSize="11"
+                                                           FontWeight="Black" />
+                                                <TextBlock x:Name="StrongsNumberText"
+                                                           Foreground="#111111"
+                                                           FontSize="14"
+                                                           FontWeight="Black"
+                                                           Margin="0,5,0,0"
+                                                           TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border x:Name="StrongsTagntSection"
+                                                Background="{DynamicResource TextSecondary}"
+                                                BorderBrush="{DynamicResource Mint}"
+                                                BorderThickness="1"
+                                                CornerRadius="4"
+                                                Padding="10"
+                                                Margin="0,0,0,10">
+                                            <StackPanel>
+                                                <TextBlock Text="TAGNT CONTEXT"
+                                                           Foreground="{DynamicResource PanelBackground}"
+                                                           FontSize="11"
+                                                           FontWeight="Black" />
+                                                <TextBlock x:Name="StrongsGrammarText"
+                                                           Foreground="{DynamicResource AppBackground}"
+                                                           FontSize="13"
+                                                           Margin="0,5,0,0"
+                                                           TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border x:Name="StrongsLexiconSummarySection"
+                                                Background="{DynamicResource TextSecondary}"
+                                                BorderBrush="{DynamicResource Mint}"
+                                                BorderThickness="1"
+                                                CornerRadius="4"
+                                                Padding="10"
+                                                Margin="0,0,0,10">
+                                            <StackPanel>
+                                                <TextBlock Text="LEXICON SUMMARY"
+                                                           Foreground="{DynamicResource PanelBackground}"
+                                                           FontSize="11"
+                                                           FontWeight="Black" />
+                                                <TextBlock x:Name="StrongsLexiconSummaryText"
+                                                           Foreground="#111111"
+                                                           FontSize="13"
+                                                           Margin="0,5,0,0"
+                                                           TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border x:Name="StrongsDefinitionSection"
+                                                Background="{DynamicResource TextSecondary}"
+                                                BorderBrush="#111111"
+                                                BorderThickness="1"
+                                                CornerRadius="4"
+                                                Padding="10"
+                                                Margin="0,0,0,2">
+                                            <StackPanel>
+                                                <TextBlock Text="DEFINITION"
+                                                           Foreground="{DynamicResource PanelBackground}"
+                                                           FontSize="11"
+                                                           FontWeight="Black" />
+                                                <TextBlock x:Name="StrongsDefinitionText"
+                                                           Foreground="#111111"
+                                                           FontSize="14"
+                                                           LineHeight="20"
+                                                           Margin="0,7,0,0"
+                                                           TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+
+                        <Canvas Grid.Column="0"
+                                Grid.ColumnSpan="5"
+                                Grid.Row="0"
+                                Grid.RowSpan="2"
+                                Panel.ZIndex="100"
+                                ClipToBounds="False"
+                                IsHitTestVisible="False">
+                            <Border x:Name="SlashCommandMenu"
+                                    Canvas.Left="42"
+                                    Canvas.Top="42"
+                                    Width="286"
+                                    Background="{DynamicResource AppBackground}"
+                                    BorderBrush="#111111"
+                                    BorderThickness="1.5"
+                                    CornerRadius="8"
+                                    Padding="8"
+                                    IsHitTestVisible="True"
+                                    Opacity="0"
+                                    RenderTransformOrigin="0.08,0.02"
+                                    Visibility="Collapsed">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="SlashCommandMenuScale"
+                                                    ScaleX="0.96"
+                                                    ScaleY="0.96" />
+                                </Border.RenderTransform>
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#000000"
+                                                      BlurRadius="0"
+                                                      ShadowDepth="5"
+                                                      Direction="315"
+                                                      Opacity="0.55" />
+                                </Border.Effect>
+                                <ListBox x:Name="SlashCommandList"
+                                             Background="Transparent"
+                                             BorderThickness="0"
+                                             SelectionMode="Single"
+                                             PreviewMouseLeftButtonUp="SlashCommandList_PreviewMouseLeftButtonUp">
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Background" Value="Transparent" />
+                                                <Setter Property="BorderThickness" Value="0" />
+                                                <Setter Property="Padding" Value="0" />
+                                                <Setter Property="Margin" Value="0,2" />
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="ListBoxItem">
+                                                            <Border x:Name="Root"
+                                                                    Background="{TemplateBinding Background}"
+                                                                    CornerRadius="6"
+                                                                    Padding="10,9">
+                                                                <ContentPresenter />
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsSelected" Value="True">
+                                                                    <Setter TargetName="Root" Property="Background" Value="{DynamicResource PanelBackground}" />
+                                                                </Trigger>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="Root" Property="Background" Value="{DynamicResource PanelBackground}" />
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="44" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Shortcut}"
+                                                               Foreground="{Binding AccentBrush}"
+                                                               FontWeight="Black"
+                                                               VerticalAlignment="Center" />
+                                                    <StackPanel Grid.Column="1">
+                                                        <TextBlock Text="{Binding Title}"
+                                                                   Foreground="{DynamicResource TextPrimary}"
+                                                                   FontWeight="Bold" />
+                                                        <TextBlock Text="{Binding Description}"
+                                                                   Foreground="{DynamicResource TextMuted}"
+                                                                   FontSize="12"
+                                                                   Margin="0,2,0,0" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Border>
+                        </Canvas>
+
+                        <Popup x:Name="StrongsHoverPopup"
+                               Placement="MousePoint"
+                               HorizontalOffset="10"
+                               VerticalOffset="-118"
+                               AllowsTransparency="True"
+                               PopupAnimation="None"
+                               StaysOpen="True"
+                               IsHitTestVisible="False">
+                            <Grid x:Name="StrongsHoverPopupRoot"
+                                  Opacity="0"
+                                  RenderTransformOrigin="0,1">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="StrongsHoverPopupScale"
+                                                    ScaleX="0.72"
+                                                    ScaleY="0.72" />
+                                </Grid.RenderTransform>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="12" />
+                                </Grid.RowDefinitions>
+                                <Border Background="{DynamicResource TextPrimary}"
+                                        BorderBrush="#111111"
+                                        BorderThickness="1.5"
+                                        CornerRadius="5"
+                                        Padding="10"
+                                        Width="242">
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="#000000"
+                                                          BlurRadius="0"
+                                                          ShadowDepth="4"
+                                                          Direction="315"
+                                                          Opacity="0.35" />
+                                    </Border.Effect>
+                                    <StackPanel>
+                                        <TextBlock x:Name="StrongsHoverGreekText"
+                                                   Foreground="#111111"
+                                                   FontSize="18"
+                                                   FontWeight="Black"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock x:Name="StrongsHoverStrongText"
+                                                   Foreground="{DynamicResource PanelBackground}"
+                                                   FontSize="12"
+                                                   FontWeight="Black"
+                                                   Margin="0,4,0,0"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock x:Name="StrongsHoverGlossText"
+                                                   Foreground="{DynamicResource AppBackground}"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,6,0,0"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock x:Name="StrongsHoverTranslationText"
+                                                   Foreground="#111111"
+                                                   FontSize="12"
+                                                   Margin="0,6,0,0"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                                <Path Grid.Row="1"
+                                      Fill="{DynamicResource TextPrimary}"
+                                      Stroke="#111111"
+                                      StrokeThickness="1.5"
+                                      Data="M 0 0 L 12 0 L 0 12 Z"
+                                      HorizontalAlignment="Left"
+                                      Margin="12,-1,0,0" />
+                            </Grid>
+                        </Popup>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Canvas x:Name="PageTransitionOverlay"
+                    Grid.RowSpan="2"
+                    Panel.ZIndex="999"
+                    Background="Transparent"
+                    IsHitTestVisible="True"
+                    Visibility="Collapsed">
+                <Ellipse x:Name="PageTransitionCircle"
+                         Fill="{DynamicResource AppBackground}"
+                         Width="0"
+                         Height="0"
+                         Opacity="1" />
+            </Canvas>
+        </Grid>
+
+        <Border x:Name="ToastHost"
+                Grid.ColumnSpan="2"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Margin="0,24,28,0"
+                Background="{DynamicResource AppBackground}"
+                BorderBrush="{DynamicResource Mint}"
+                BorderThickness="1.5"
+                CornerRadius="12"
+                Padding="14,10"
+                MaxWidth="360"
+                Opacity="0"
+                Visibility="Collapsed"
+                Panel.ZIndex="500"
+                IsHitTestVisible="False">
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="ToastHostTransform"
+                                    X="28"
+                                    Y="-8" />
+            </Border.RenderTransform>
+            <Border.Effect>
+                <DropShadowEffect Color="#000000"
+                                  BlurRadius="0"
+                                  ShadowDepth="5"
+                                  Direction="315"
+                                  Opacity="0.45" />
+            </Border.Effect>
+            <TextBlock x:Name="ToastText"
+                       Foreground="{DynamicResource TextPrimary}"
+                       FontWeight="SemiBold"
+                       TextWrapping="Wrap" />
+        </Border>
+    </Grid>
+</Window>
+

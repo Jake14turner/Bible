@@ -1,0 +1,75 @@
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\bin\Debug\net10.0\appsettings.Development.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\bin\Debug\net10.0\appsettings.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\bin\Debug\net10.0\BibleStudy.Backend.staticwebassets.endpoints.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\bin\Debug\net10.0\BibleStudy.Backend.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\bin\Debug\net10.0\BibleStudy.Backend.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\bin\Debug\net10.0\BibleStudy.Backend.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\bin\Debug\net10.0\BibleStudy.Backend.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\rpswa.dswa.cache.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\BibleStudy.Backend.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\BibleStudy.Backend.AssemblyInfoInputs.cache
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\BibleStudy.Backend.AssemblyInfo.cs
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\BibleStudy.Backend.csproj.CoreCompileInputs.cache
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\BibleStudy.Backend.MvcApplicationPartsAssemblyInfo.cache
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\rjimswa.dswa.cache.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\rjsmrazor.dswa.cache.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\rjsmcshtml.dswa.cache.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\scopedcss\bundle\BibleStudy.Backend.styles.css
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\staticwebassets.build.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\staticwebassets.build.json.cache
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\staticwebassets.development.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\staticwebassets.build.endpoints.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\swae.build.ex.cache
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\BibleStudy.Backend.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\refint\BibleStudy.Backend.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\BibleStudy.Backend.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\BibleStudy.Backend.genruntimeconfig.cache
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\Debug\net10.0\ref\BibleStudy.Backend.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\verify-build\appsettings.Development.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\verify-build\appsettings.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\verify-build\BibleStudy.Backend.staticwebassets.endpoints.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\verify-build\BibleStudy.Backend.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\verify-build\BibleStudy.Backend.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\verify-build\BibleStudy.Backend.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\obj\verify-build\BibleStudy.Backend.pdb
+C:\Users\jake1\.codex\visualizations\2026\08\02\019fc3af-4ca4-7042-9261-f247b5c477a1\backend-out\appsettings.Development.json
+C:\Users\jake1\.codex\visualizations\2026\08\02\019fc3af-4ca4-7042-9261-f247b5c477a1\backend-out\appsettings.json
+C:\Users\jake1\.codex\visualizations\2026\08\02\019fc3af-4ca4-7042-9261-f247b5c477a1\backend-out\BibleStudy.Backend.staticwebassets.endpoints.json
+C:\Users\jake1\.codex\visualizations\2026\08\02\019fc3af-4ca4-7042-9261-f247b5c477a1\backend-out\BibleStudy.Backend.exe
+C:\Users\jake1\.codex\visualizations\2026\08\02\019fc3af-4ca4-7042-9261-f247b5c477a1\backend-out\BibleStudy.Backend.deps.json
+C:\Users\jake1\.codex\visualizations\2026\08\02\019fc3af-4ca4-7042-9261-f247b5c477a1\backend-out\BibleStudy.Backend.runtimeconfig.json
+C:\Users\jake1\.codex\visualizations\2026\08\02\019fc3af-4ca4-7042-9261-f247b5c477a1\backend-out\BibleStudy.Backend.dll
+C:\Users\jake1\.codex\visualizations\2026\08\02\019fc3af-4ca4-7042-9261-f247b5c477a1\backend-out\BibleStudy.Backend.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-nasb\appsettings.Development.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-nasb\appsettings.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-nasb\BibleStudy.Backend.staticwebassets.endpoints.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-nasb\BibleStudy.Backend.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-nasb\BibleStudy.Backend.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-nasb\BibleStudy.Backend.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-nasb\BibleStudy.Backend.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-nasb\BibleStudy.Backend.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-toggle\appsettings.Development.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-toggle\appsettings.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-toggle\BibleStudy.Backend.staticwebassets.endpoints.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-toggle\BibleStudy.Backend.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-toggle\BibleStudy.Backend.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-toggle\BibleStudy.Backend.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-toggle\BibleStudy.Backend.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\verify-toggle\BibleStudy.Backend.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\BibleStudy.Backend\bin\Debug\net10.0\BibleStudy.Backend.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-cancel\appsettings.Development.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-cancel\appsettings.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-cancel\BibleStudy.Backend.staticwebassets.endpoints.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-cancel\BibleStudy.Backend.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-cancel\BibleStudy.Backend.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-cancel\BibleStudy.Backend.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-cancel\BibleStudy.Backend.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-cancel\BibleStudy.Backend.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-store\appsettings.Development.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-store\appsettings.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-store\BibleStudy.Backend.staticwebassets.endpoints.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-store\BibleStudy.Backend.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-store\BibleStudy.Backend.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-store\BibleStudy.Backend.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-store\BibleStudy.Backend.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-backend-store\BibleStudy.Backend.pdb
