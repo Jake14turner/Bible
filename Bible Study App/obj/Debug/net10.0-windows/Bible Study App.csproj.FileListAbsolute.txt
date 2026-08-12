@@ -473,3 +473,28 @@ C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\strongs-resize-scroll-verify
 C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\strongs-resize-scroll-verify\Bible Study App.runtimeconfig.json
 C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\strongs-resize-scroll-verify\Bible Study App.dll
 C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\strongs-resize-scroll-verify\Bible Study App.pdb
+C:\Users\jake1\Desktop\Bible\Bible Study App\bin\Debug\net10.0-windows\Data\asv.json
+C:\Users\jake1\Desktop\Bible\Bible Study App\bin\Debug\net10.0-windows\Bible Study App.exe
+C:\Users\jake1\Desktop\Bible\Bible Study App\bin\Debug\net10.0-windows\Bible Study App.deps.json
+C:\Users\jake1\Desktop\Bible\Bible Study App\bin\Debug\net10.0-windows\Bible Study App.runtimeconfig.json
+C:\Users\jake1\Desktop\Bible\Bible Study App\bin\Debug\net10.0-windows\Bible Study App.dll
+C:\Users\jake1\Desktop\Bible\Bible Study App\bin\Debug\net10.0-windows\Bible Study App.pdb
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\MainWindow.g.cs
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\App.g.cs
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\Bible Study App_MarkupCompile.cache
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\Bible Study App_MarkupCompile.lref
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\MainWindow.baml
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\Bible Study App.g.resources
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\Bible Study App.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\Bible Study App.AssemblyInfoInputs.cache
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\Bible Study App.AssemblyInfo.cs
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\Bible Study App.csproj.CoreCompileInputs.cache
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\Bible Study App.sourcelink.json
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\Bible Study App.dll
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\refint\Bible Study App.dll
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\Bible Study App.pdb
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\Bible Study App.genruntimeconfig.cache
+C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\ref\Bible Study App.dll
+C:\Users\jake1\Desktop\Bible\Bible Study App\bin\Debug\net10.0-windows\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\Desktop\Bible\Bible Study App\bin\Debug\net10.0-windows\Data\tagnt-act-rev.txt
+C:\Users\jake1\Desktop\Bible\Bible Study App\bin\Debug\net10.0-windows\Data\tbesg.txt

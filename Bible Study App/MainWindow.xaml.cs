@@ -116,6 +116,15 @@ public partial class MainWindow : Window
     private readonly Dictionary<int, Paragraph> _scriptureParagraphsByVerse = new();
     private readonly Dictionary<ScriptureReferenceKey, List<TagntWordEntry>> _tagntEntriesByReference = new();
     private readonly Dictionary<string, GreekLexiconEntry> _greekLexiconByStrong = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly GreekLexiconEntry EmptyGreekLexiconEntry = new(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
+    private enum DefinitionLineKind { Lead, Main, Sub }
+    private sealed record DefinitionLine(DefinitionLineKind Kind, string Marker, string Text);
+    private enum MovablePanelKind { Scripture, Strongs }
+    private enum PanelPreset { Top, Left, Right, Bottom, Float }
+    private static readonly Brush PanelPresetIdleBrush = BrushFrom("#E6DDAA");
+    private static readonly Brush PanelPresetIdleBorderBrush = BrushFrom("#111111");
+    private static readonly Brush PanelPresetActiveBrush = BrushFrom("#B7C98B");
+    private static readonly Brush PanelPresetActiveBorderBrush = BrushFrom("#606C38");
     private string _scriptureTranslationLabel = "ASV";
     private string? _scriptureVisibleBookName;
     private int? _scriptureVisibleChapter;
@@ -157,8 +166,19 @@ public partial class MainWindow : Window
     private bool _strongsEnabled;
     private bool _greekLexiconLoaded;
     private bool _suppressRenameCommit;
-    private GridLength _scripturePanelVisibleWidth = new(360);
+    private GridLength _scripturePanelVisibleWidth = new(440);
     private GridLength _strongsPanelVisibleWidth = new(330);
+    private MovablePanelKind? _draggingPanelKind;
+    private TranslateTransform? _draggingPanelTransform;
+    private UIElement? _draggingPanelHandle;
+    private Point _panelDragStartPoint;
+    private Point _panelDragStartOffset;
+    private Point _panelDragPointer;
+    private Point _panelDragPendingOffset;
+    private bool _panelDragRenderSubscribed;
+    private PanelPreset? _hoveredPanelPreset;
+    private PanelPreset _scripturePanelPreset = PanelPreset.Right;
+    private PanelPreset _strongsPanelPreset = PanelPreset.Right;
 
     public ObservableCollection<BibleBook> BibleBooks { get; } = new();
     public ObservableCollection<BibleBook> OldTestamentBooks { get; } = new();
@@ -240,6 +260,7 @@ public partial class MainWindow : Window
         StopTodaySmoothScroll();
         StopScheduledMessagesSmoothScroll();
         StopStrongsSmoothScroll();
+        StopPanelDragRendering();
         StopScrollBarRevealTimers();
         SaveWorkspaceState();
         base.OnClosing(e);
@@ -2582,31 +2603,46 @@ public partial class MainWindow : Window
     {
         foreach (var line in lines)
         {
-            if (string.IsNullOrWhiteSpace(line) || !line.StartsWith("G", StringComparison.OrdinalIgnoreCase))
+            if (!TryParseGreekLexiconLine(line, out var entry))
             {
                 continue;
             }
 
-            var cells = line.Split('\t');
-            if (cells.Length < 8 || !Regex.IsMatch(cells[0].Trim(), @"^G\d{4,5}[A-Z]?$", RegexOptions.CultureInvariant))
-            {
-                continue;
-            }
+            CacheGreekLexiconEntry(entry);
+        }
+    }
 
-            var entry = new GreekLexiconEntry(
-                cells[0].Trim(),
-                cells[1].Trim(),
-                cells[2].Trim(),
-                cells[3].Trim(),
-                cells[4].Trim(),
-                cells[5].Trim(),
-                cells[6].Trim(),
-                CleanLexiconMarkup(cells[7].Trim()));
+    private static bool TryParseGreekLexiconLine(string line, out GreekLexiconEntry entry)
+    {
+        entry = EmptyGreekLexiconEntry;
+        if (string.IsNullOrWhiteSpace(line) || !line.StartsWith("G", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
 
-            foreach (var strong in GetLexiconKeys(entry))
-            {
-                _greekLexiconByStrong.TryAdd(strong, entry);
-            }
+        var cells = line.Split('\t');
+        if (cells.Length < 8 || !Regex.IsMatch(cells[0].Trim(), @"^G\d{4,5}[A-Z]?$", RegexOptions.CultureInvariant))
+        {
+            return false;
+        }
+
+        entry = new GreekLexiconEntry(
+            cells[0].Trim(),
+            cells[1].Trim(),
+            cells[2].Trim(),
+            cells[3].Trim(),
+            cells[4].Trim(),
+            cells[5].Trim(),
+            cells[6].Trim(),
+            CleanLexiconMarkup(cells[7].Trim()));
+        return true;
+    }
+
+    private void CacheGreekLexiconEntry(GreekLexiconEntry entry)
+    {
+        foreach (var strong in GetLexiconKeys(entry))
+        {
+            _greekLexiconByStrong.TryAdd(strong, entry);
         }
     }
 
@@ -2639,25 +2675,79 @@ public partial class MainWindow : Window
 
     private GreekLexiconEntry? FindGreekLexiconEntry(TagntWordEntry entry)
     {
-        EnsureGreekLexiconDataLoaded();
-
-        var candidates = ExtractStrongCandidates(entry.DStrong, entry.SimpleStrong, entry.AltStrongs).Distinct(StringComparer.OrdinalIgnoreCase);
+        var candidates = ExtractStrongCandidates(entry.DStrong, entry.SimpleStrong, entry.AltStrongs)
+            .SelectMany(GetStrongLookupCandidates)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         foreach (var candidate in candidates)
         {
             if (_greekLexiconByStrong.TryGetValue(candidate, out var exactMatch))
             {
                 return exactMatch;
             }
+        }
 
-            var baseCandidate = Regex.Match(candidate, @"^G\d{4,5}", RegexOptions.CultureInvariant).Value;
-            if (!string.IsNullOrWhiteSpace(baseCandidate)
-                && _greekLexiconByStrong.TryGetValue(baseCandidate, out var baseMatch))
+        var searchedEntry = FindGreekLexiconEntryInFiles(candidates);
+        if (searchedEntry is not null)
+        {
+            CacheGreekLexiconEntry(searchedEntry);
+        }
+
+        return searchedEntry;
+    }
+
+    private GreekLexiconEntry? FindGreekLexiconEntryInFiles(IReadOnlyCollection<string> candidates)
+    {
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        foreach (var path in GetGreekLexiconDataPaths().Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (!File.Exists(path))
             {
-                return baseMatch;
+                continue;
+            }
+
+            try
+            {
+                foreach (var line in File.ReadLines(path))
+                {
+                    if (!TryParseGreekLexiconLine(line, out var entry))
+                    {
+                        continue;
+                    }
+
+                    if (GetLexiconKeys(entry).Any(key => candidates.Contains(key, StringComparer.OrdinalIgnoreCase)))
+                    {
+                        return entry;
+                    }
+                }
+            }
+            catch
+            {
+                // Lexicon lookup is best-effort; a bad file should not break Strong's tagging.
             }
         }
 
         return null;
+    }
+
+    private static IEnumerable<string> GetStrongLookupCandidates(string strong)
+    {
+        if (string.IsNullOrWhiteSpace(strong))
+        {
+            yield break;
+        }
+
+        yield return strong;
+
+        var baseStrong = Regex.Match(strong, @"^G\d{4,5}", RegexOptions.CultureInvariant).Value;
+        if (!string.IsNullOrWhiteSpace(baseStrong) && !baseStrong.Equals(strong, StringComparison.OrdinalIgnoreCase))
+        {
+            yield return baseStrong;
+        }
     }
 
     private void EnsureGreekLexiconDataLoaded()
@@ -3106,11 +3196,21 @@ public partial class MainWindow : Window
 
     private void ScriptureScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
+        if (_strongsEnabled)
+        {
+            return;
+        }
+
         UpdateScriptureSelectionMarker();
     }
 
     private void ScriptureScrollViewer_SizeChanged(object sender, SizeChangedEventArgs e)
     {
+        if (_strongsEnabled)
+        {
+            return;
+        }
+
         UpdateScriptureSelectionMarker();
     }
 
@@ -3126,8 +3226,9 @@ public partial class MainWindow : Window
         var currentTarget = _scriptureSmoothScrollActive
             ? _scriptureSmoothScrollTargetOffset
             : scrollViewer.VerticalOffset;
+        var scrollSpeed = _strongsEnabled ? 1.05 : 0.55;
         _scriptureSmoothScrollTargetOffset = Math.Clamp(
-            currentTarget - (e.Delta * 0.55),
+            currentTarget - (e.Delta * scrollSpeed),
             0,
             scrollViewer.ScrollableHeight);
         StartScriptureSmoothScroll();
@@ -3608,8 +3709,15 @@ public partial class MainWindow : Window
                 block.FontSize = e.NewValue;
             }
         }
+        if (ScripturePanelTitle is not null)
+        {
+            ScripturePanelTitle.FontSize = e.NewValue + 4;
+        }
 
-        Dispatcher.BeginInvoke(() => UpdateScriptureSelectionMarker(), DispatcherPriority.Background);
+        if (!_strongsEnabled)
+        {
+            Dispatcher.BeginInvoke(() => UpdateScriptureSelectionMarker(), DispatcherPriority.Background);
+        }
     }
 
     private void ScrollScriptureToSelectedVerse()
@@ -3672,12 +3780,13 @@ public partial class MainWindow : Window
 
         foreach (var verse in _scriptureVerses)
         {
-            var selectedBackground = CreateAnimatedVerseHighlightBrush(verse.IsSelected);
             var paragraph = new Paragraph
             {
                 Margin = new Thickness(0, 0, 0, 3),
                 Padding = new Thickness(6, 4, 6, 4),
-                Background = selectedBackground
+                Background = _strongsEnabled
+                    ? Brushes.Transparent
+                    : CreateAnimatedVerseHighlightBrush(verse.IsSelected)
             };
 
             paragraph.Inlines.Add(new Run(verse.VerseNumber.ToString(CultureInfo.InvariantCulture))
@@ -3739,8 +3848,6 @@ public partial class MainWindow : Window
                 Tag = new StrongsSelection(_scriptureVisibleBookName ?? string.Empty, _scriptureVisibleChapter ?? 0, verse.VerseNumber, phrase, match.Entry)
             };
             link.Click += StrongsPhrase_Click;
-            link.MouseEnter += StrongsLink_MouseEnter;
-            link.MouseLeave += StrongsLink_MouseLeave;
             paragraph.Inlines.Add(link);
             cursor = match.Start + match.Length;
             linkIndex++;
@@ -5203,7 +5310,7 @@ public partial class MainWindow : Window
         }
 
         var targetWidth = _scripturePanelVisibleWidth.Value <= 0
-            ? 360
+            ? 440
             : Math.Max(280, _scripturePanelVisibleWidth.Value);
         ScriptureColumn.MinWidth = 0;
         ScriptureColumnSplitter.Visibility = Visibility.Visible;
@@ -5231,9 +5338,18 @@ public partial class MainWindow : Window
         {
             HideStrongsPanel(animate: true);
         }
+        else
+        {
+            HideStrongsHoverPreview();
+            ScriptureSelectionRail.Visibility = Visibility.Collapsed;
+            ScriptureSelectionMarker.Visibility = Visibility.Collapsed;
+        }
 
         RenderScriptureDocument();
-        UpdateScriptureSelectionMarker();
+        if (!_strongsEnabled)
+        {
+            UpdateScriptureSelectionMarker();
+        }
     }
 
     private void StrongsPhrase_Click(object sender, RoutedEventArgs e)
@@ -5270,20 +5386,15 @@ public partial class MainWindow : Window
     private void ShowStrongsHoverPreview(StrongsSelection selection)
     {
         var entry = selection.Entry;
-        var lexiconEntry = FindGreekLexiconEntry(entry);
         var greekText = !string.IsNullOrWhiteSpace(entry.Greek)
             ? entry.Greek
             : selection.Phrase;
-        if (!string.IsNullOrWhiteSpace(lexiconEntry?.Transliteration))
-        {
-            greekText = $"{greekText} ({lexiconEntry.Transliteration})";
-        }
 
         StrongsHoverGreekText.Text = greekText;
         StrongsHoverStrongText.Text = string.IsNullOrWhiteSpace(entry.DStrong)
             ? string.Empty
             : entry.DStrong;
-        StrongsHoverGlossText.Text = FirstNonEmpty(lexiconEntry?.Gloss, entry.Gloss, entry.SubMeaning, entry.DictionaryForm);
+        StrongsHoverGlossText.Text = FirstNonEmpty(entry.Gloss, entry.SubMeaning, entry.DictionaryForm);
         StrongsHoverTranslationText.Text = string.IsNullOrWhiteSpace(entry.English)
             ? selection.Phrase
             : $"Translation: {entry.English}";
@@ -5371,15 +5482,7 @@ public partial class MainWindow : Window
             .ToList();
         StrongsLexiconSummaryText.Text = string.Join("\n", lexiconSummary);
 
-        var definitionParts = new[]
-            {
-                string.IsNullOrWhiteSpace(lexiconEntry?.Meaning) ? null : FormatLexiconMeaning(lexiconEntry.Meaning)
-            }
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .ToList();
-        StrongsDefinitionText.Text = definitionParts.Count == 0
-            ? "Definition lookup is ready. Drop the TBESG Greek lexicon text file into the app Data folder to show the full Strong's definition here."
-            : string.Join("\n", definitionParts);
+        SetStrongsDefinitionDocument(lexiconEntry?.Meaning);
         UpdateStrongsSectionVisibility();
 
         if (StrongsPanelRoot.Visibility != Visibility.Visible)
@@ -5408,7 +5511,7 @@ public partial class MainWindow : Window
         StrongsLexiconSummarySection.Visibility = HasVisibleText(StrongsLexiconSummaryText)
             ? Visibility.Visible
             : Visibility.Collapsed;
-        StrongsDefinitionSection.Visibility = HasVisibleText(StrongsDefinitionText)
+        StrongsDefinitionSection.Visibility = StrongsDefinitionDocument.Blocks.Count > 0
             ? Visibility.Visible
             : Visibility.Collapsed;
     }
@@ -5418,18 +5521,175 @@ public partial class MainWindow : Window
         return !string.IsNullOrWhiteSpace(textBlock.Text);
     }
 
-    private static string FormatLexiconMeaning(string meaning)
+    private void SetStrongsDefinitionDocument(string? meaning)
     {
+        StrongsDefinitionDocument.Blocks.Clear();
+
+        var definitionText = string.IsNullOrWhiteSpace(meaning)
+            ? "Definition lookup is ready. Drop the TBESG Greek lexicon text file into the app Data folder to show the full Strong's definition here."
+            : meaning;
+
+        var lines = BuildDefinitionLines(definitionText);
+        if (lines.Count == 0)
+        {
+            return;
+        }
+
+        var hasMainPoint = false;
+        foreach (var line in lines)
+        {
+            if (line.Kind == DefinitionLineKind.Main)
+            {
+                if (hasMainPoint || StrongsDefinitionDocument.Blocks.Count > 0)
+                {
+                    AddDefinitionDivider();
+                }
+
+                hasMainPoint = true;
+            }
+
+            StrongsDefinitionDocument.Blocks.Add(CreateDefinitionParagraph(line));
+        }
+    }
+
+    private Paragraph CreateDefinitionParagraph(DefinitionLine line)
+    {
+        var paragraph = new Paragraph
+        {
+            Margin = line.Kind switch
+            {
+                DefinitionLineKind.Main => new Thickness(0, 0, 0, 8),
+                DefinitionLineKind.Sub => new Thickness(34, 0, 0, 7),
+                _ => new Thickness(0, 0, 0, 7)
+            },
+            LineHeight = line.Kind == DefinitionLineKind.Main ? 22 : 20,
+            Foreground = new SolidColorBrush(Color.FromRgb(17, 17, 17))
+        };
+
+        if (!string.IsNullOrWhiteSpace(line.Marker))
+        {
+            paragraph.Inlines.Add(new Run(line.Marker)
+            {
+                FontSize = line.Kind == DefinitionLineKind.Main ? 18 : 15,
+                FontWeight = FontWeights.Black,
+                Foreground = GetResourceBrush(line.Kind == DefinitionLineKind.Main ? "PanelBackground" : "AppBackground")
+            });
+            paragraph.Inlines.Add(new Run(" "));
+        }
+
+        AddDefinitionTextRuns(paragraph, line.Text, line.Kind != DefinitionLineKind.Lead);
+        return paragraph;
+    }
+
+    private void AddDefinitionDivider()
+    {
+        StrongsDefinitionDocument.Blocks.Add(new BlockUIContainer(new Border
+        {
+            Height = 1,
+            Margin = new Thickness(0, 5, 0, 9),
+            Background = GetResourceBrush("PanelBackground"),
+            Opacity = 0.45
+        }));
+    }
+
+    private static void AddDefinitionTextRuns(Paragraph paragraph, string text, bool boldLeadPhrase)
+    {
+        var trimmed = text.Trim();
+        if (!boldLeadPhrase)
+        {
+            paragraph.Inlines.Add(new Run(trimmed)
+            {
+                FontSize = 15,
+                FontWeight = FontWeights.SemiBold
+            });
+            return;
+        }
+
+        var leadLength = FindDefinitionLeadPhraseLength(trimmed);
+        if (leadLength <= 0)
+        {
+            paragraph.Inlines.Add(new Run(trimmed)
+            {
+                FontSize = 15
+            });
+            return;
+        }
+
+        paragraph.Inlines.Add(new Run(trimmed[..leadLength])
+        {
+            FontSize = paragraph.LineHeight >= 22 ? 16 : 15,
+            FontWeight = FontWeights.Black
+        });
+
+        if (leadLength < trimmed.Length)
+        {
+            paragraph.Inlines.Add(new Run(trimmed[leadLength..])
+            {
+                FontSize = paragraph.LineHeight >= 22 ? 15 : 14
+            });
+        }
+    }
+
+    private static int FindDefinitionLeadPhraseLength(string text)
+    {
+        var delimiterIndex = text.IndexOfAny([',', ';', ':']);
+        if (delimiterIndex < 0 || delimiterIndex > 72)
+        {
+            return 0;
+        }
+
+        return delimiterIndex + 1;
+    }
+
+    private static List<DefinitionLine> BuildDefinitionLines(string meaning)
+    {
+        var lines = new List<DefinitionLine>();
         if (string.IsNullOrWhiteSpace(meaning))
         {
-            return string.Empty;
+            return lines;
         }
 
         var normalized = meaning.Trim();
-        normalized = Regex.Replace(normalized, @"\s*__([0-9]+)\.", "\n\n$1. ", RegexOptions.CultureInvariant);
-        normalized = Regex.Replace(normalized, @"\s*__\(([a-z])\)", "\n$1. ", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        normalized = Regex.Replace(normalized, @"\s*__([IVXLCDM]+)\.\s*", "\n$1. ", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        normalized = Regex.Replace(normalized, @"\s*__([0-9]+)\.\s*", "\n$1. ", RegexOptions.CultureInvariant);
+        normalized = Regex.Replace(normalized, @"\s*__\(([a-z])\)\s*", "\n$1. ", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        normalized = Regex.Replace(normalized, @"(?<!\n)(?<![A-Za-z])\s([0-9]+)\.\s+", "\n$1. ", RegexOptions.CultureInvariant);
+        normalized = Regex.Replace(normalized, @"(?<!\n)\s([a-z])\.\s+", "\n$1. ", RegexOptions.CultureInvariant);
         normalized = Regex.Replace(normalized, @"\n{3,}", "\n\n", RegexOptions.CultureInvariant);
-        return normalized.Trim();
+
+        foreach (var rawLine in normalized.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = Regex.Replace(rawLine.Trim(), @"\s+", " ", RegexOptions.CultureInvariant);
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            var romanMatch = Regex.Match(line, @"^(?<marker>[IVXLCDM]+)\.\s*(?<text>.+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (romanMatch.Success)
+            {
+                lines.Add(new DefinitionLine(DefinitionLineKind.Main, "-", $"{romanMatch.Groups["marker"].Value}. {romanMatch.Groups["text"].Value.Trim()}"));
+                continue;
+            }
+
+            var numberMatch = Regex.Match(line, @"^(?<marker>[0-9]+)\.\s*(?<text>.+)$", RegexOptions.CultureInvariant);
+            if (numberMatch.Success)
+            {
+                lines.Add(new DefinitionLine(DefinitionLineKind.Main, "-", $"{numberMatch.Groups["marker"].Value}. {numberMatch.Groups["text"].Value.Trim()}"));
+                continue;
+            }
+
+            var letterMatch = Regex.Match(line, @"^(?<marker>[a-z])\.\s*(?<text>.+)$", RegexOptions.CultureInvariant);
+            if (letterMatch.Success)
+            {
+                lines.Add(new DefinitionLine(DefinitionLineKind.Sub, "↳", $"{letterMatch.Groups["marker"].Value}. {letterMatch.Groups["text"].Value.Trim()}"));
+                continue;
+            }
+
+            lines.Add(new DefinitionLine(DefinitionLineKind.Lead, string.Empty, line));
+        }
+
+        return lines;
     }
 
     private static string BuildTagntDetailLine(TagntWordEntry entry)
@@ -5449,6 +5709,419 @@ public partial class MainWindow : Window
         return string.IsNullOrWhiteSpace(detail)
             ? "Grammar and variant details will appear when those TAGNT rows are loaded."
             : detail;
+    }
+
+    private void PanelDragHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not UIElement handle || StudyPanel.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        var kind = ReferenceEquals(handle, ScripturePanelDragHandle)
+            ? MovablePanelKind.Scripture
+            : ReferenceEquals(handle, StrongsPanelDragHandle)
+                ? MovablePanelKind.Strongs
+                : (MovablePanelKind?)null;
+        if (kind is null || kind == MovablePanelKind.Strongs && StrongsPanelRoot.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        _draggingPanelKind = kind;
+        _draggingPanelHandle = handle;
+        _draggingPanelTransform = kind == MovablePanelKind.Scripture
+            ? ScripturePanelDragTransform
+            : StrongsPanelDragTransform;
+        _draggingPanelTransform.BeginAnimation(TranslateTransform.XProperty, null);
+        _draggingPanelTransform.BeginAnimation(TranslateTransform.YProperty, null);
+        _panelDragStartPoint = e.GetPosition(StudyPanel);
+        _panelDragPointer = _panelDragStartPoint;
+        _panelDragStartOffset = new Point(_draggingPanelTransform.X, _draggingPanelTransform.Y);
+        _panelDragPendingOffset = _panelDragStartOffset;
+        _hoveredPanelPreset = null;
+        Panel.SetZIndex(GetPanelRoot(kind.Value), 300);
+        ShowPanelPresetOverlay();
+        handle.CaptureMouse();
+        Mouse.OverrideCursor = Cursors.SizeAll;
+        e.Handled = true;
+    }
+
+    private void PanelDragHandle_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_draggingPanelKind is null
+            || _draggingPanelTransform is null
+            || !ReferenceEquals(sender, _draggingPanelHandle)
+            || e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var pointer = e.GetPosition(StudyPanel);
+        _panelDragPointer = pointer;
+        var delta = pointer - _panelDragStartPoint;
+        _panelDragPendingOffset = new Point(
+            _panelDragStartOffset.X + delta.X,
+            _panelDragStartOffset.Y + delta.Y);
+        if (!_panelDragRenderSubscribed)
+        {
+            _panelDragRenderSubscribed = true;
+            CompositionTarget.Rendering += PanelDrag_Rendering;
+        }
+
+        e.Handled = true;
+    }
+
+    private void PanelDrag_Rendering(object? sender, EventArgs e)
+    {
+        if (_draggingPanelKind is null || _draggingPanelTransform is null)
+        {
+            StopPanelDragRendering();
+            return;
+        }
+
+        _draggingPanelTransform.X = _panelDragPendingOffset.X;
+        _draggingPanelTransform.Y = _panelDragPendingOffset.Y;
+        SetPanelPresetHighlight(_hoveredPanelPreset ?? GetNearestPanelPreset());
+    }
+
+    private void PanelDragHandle_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_draggingPanelKind is null || !ReferenceEquals(sender, _draggingPanelHandle))
+        {
+            return;
+        }
+
+        var kind = _draggingPanelKind.Value;
+        var preset = _hoveredPanelPreset ?? GetNearestPanelPreset();
+        StopPanelDragRendering();
+        if (_draggingPanelHandle?.IsMouseCaptured == true)
+        {
+            _draggingPanelHandle.ReleaseMouseCapture();
+        }
+
+        Mouse.OverrideCursor = null;
+        _draggingPanelKind = null;
+        _draggingPanelHandle = null;
+        _draggingPanelTransform = null;
+        Panel.SetZIndex(GetPanelRoot(kind), kind == MovablePanelKind.Strongs ? 120 : 110);
+        HidePanelPresetOverlay();
+        ApplyPanelPreset(kind, preset, animate: true);
+        e.Handled = true;
+    }
+
+    private void StopPanelDragRendering()
+    {
+        if (_panelDragRenderSubscribed)
+        {
+            CompositionTarget.Rendering -= PanelDrag_Rendering;
+            _panelDragRenderSubscribed = false;
+        }
+    }
+
+    private void ShowPanelPresetOverlay()
+    {
+        if (PanelPresetOverlay is null)
+        {
+            return;
+        }
+
+        PanelPresetOverlay.Visibility = Visibility.Visible;
+        PanelPresetOverlay.IsHitTestVisible = true;
+        PositionPanelPresetTargets();
+        SetPanelPresetHighlight(GetNearestPanelPreset());
+    }
+
+    private void HidePanelPresetOverlay()
+    {
+        if (PanelPresetOverlay is null)
+        {
+            return;
+        }
+
+        PanelPresetOverlay.Visibility = Visibility.Collapsed;
+        PanelPresetOverlay.IsHitTestVisible = false;
+        _hoveredPanelPreset = null;
+        foreach (var target in new[] { PanelPresetTop, PanelPresetLeft, PanelPresetRight, PanelPresetBottom, PanelPresetFloat })
+        {
+            target.Background = PanelPresetIdleBrush;
+            target.BorderBrush = PanelPresetIdleBorderBrush;
+        }
+    }
+
+    private void PositionPanelPresetTargets()
+    {
+        var width = Math.Max(360, StudyPanel.ActualWidth);
+        var height = Math.Max(260, StudyPanel.ActualHeight);
+        const double targetWidth = 128;
+        const double targetHeight = 42;
+        const double edge = 14;
+        Canvas.SetLeft(PanelPresetTop, (width - targetWidth) / 2);
+        Canvas.SetTop(PanelPresetTop, edge);
+        Canvas.SetLeft(PanelPresetBottom, (width - targetWidth) / 2);
+        Canvas.SetTop(PanelPresetBottom, Math.Max(edge, height - targetHeight - edge));
+        Canvas.SetLeft(PanelPresetLeft, edge);
+        Canvas.SetTop(PanelPresetLeft, (height - targetHeight) / 2);
+        Canvas.SetLeft(PanelPresetRight, Math.Max(edge, width - targetWidth - edge));
+        Canvas.SetTop(PanelPresetRight, (height - targetHeight) / 2);
+        Canvas.SetLeft(PanelPresetFloat, (width - targetWidth) / 2);
+        Canvas.SetTop(PanelPresetFloat, Math.Max(edge, (height - targetHeight) / 2 - targetHeight - 12));
+    }
+
+    private void PanelPreset_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (sender is Border { Tag: string tag } && Enum.TryParse<PanelPreset>(tag, out var preset))
+        {
+            _hoveredPanelPreset = preset;
+            SetPanelPresetHighlight(preset);
+        }
+    }
+
+    private void PanelPreset_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (_draggingPanelKind is not null)
+        {
+            SetPanelPresetHighlight(_hoveredPanelPreset ?? GetNearestPanelPreset());
+        }
+    }
+
+    private void PanelPreset_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_draggingPanelKind is null
+            || sender is not Border { Tag: string tag }
+            || !Enum.TryParse<PanelPreset>(tag, out var preset))
+        {
+            return;
+        }
+
+        _hoveredPanelPreset = preset;
+        PanelDragHandle_MouseLeftButtonUp(_draggingPanelHandle!, e);
+        e.Handled = true;
+    }
+
+    private void SetPanelPresetHighlight(PanelPreset? preset)
+    {
+        foreach (var target in new[] { PanelPresetTop, PanelPresetLeft, PanelPresetRight, PanelPresetBottom, PanelPresetFloat })
+        {
+            var isSelected = preset.HasValue
+                && string.Equals(target.Tag as string, preset.Value.ToString(), StringComparison.OrdinalIgnoreCase);
+            target.Background = isSelected ? PanelPresetActiveBrush : PanelPresetIdleBrush;
+            target.BorderBrush = isSelected ? PanelPresetActiveBorderBrush : PanelPresetIdleBorderBrush;
+            target.Opacity = isSelected ? 1 : 0.84;
+        }
+    }
+
+    private PanelPreset GetNearestPanelPreset()
+    {
+        if (_draggingPanelKind is null)
+        {
+            return PanelPreset.Right;
+        }
+
+        var width = Math.Max(1, StudyPanel.ActualWidth);
+        var height = Math.Max(1, StudyPanel.ActualHeight);
+        var pointer = _panelDragPointer;
+        if (pointer.Y < height * 0.20)
+        {
+            return PanelPreset.Top;
+        }
+
+        if (pointer.Y > height * 0.80)
+        {
+            return PanelPreset.Bottom;
+        }
+
+        if (pointer.X < width * 0.20)
+        {
+            return PanelPreset.Left;
+        }
+
+        if (pointer.X > width * 0.80)
+        {
+            return PanelPreset.Right;
+        }
+
+        return PanelPreset.Float;
+    }
+
+    private Border GetPanelRoot(MovablePanelKind kind)
+    {
+        return kind == MovablePanelKind.Scripture ? ScripturePanelRoot : StrongsPanelRoot;
+    }
+
+    private TranslateTransform GetPanelTransform(MovablePanelKind kind)
+    {
+        return kind == MovablePanelKind.Scripture ? ScripturePanelDragTransform : StrongsPanelDragTransform;
+    }
+
+    private Rect GetPanelBounds(Border panel)
+    {
+        if (panel.ActualWidth <= 0 || panel.ActualHeight <= 0 || StudyPanel.ActualWidth <= 0)
+        {
+            return Rect.Empty;
+        }
+
+        var transform = panel.TransformToAncestor(StudyPanel);
+        var topLeft = transform.Transform(new Point(0, 0));
+        var bottomRight = transform.Transform(new Point(panel.ActualWidth, panel.ActualHeight));
+        return new Rect(topLeft, bottomRight);
+    }
+
+    private void ApplyPanelPreset(MovablePanelKind kind, PanelPreset preset, bool animate)
+    {
+        var panel = GetPanelRoot(kind);
+        var transform = GetPanelTransform(kind);
+        if (panel.ActualWidth <= 0 || panel.ActualHeight <= 0)
+        {
+            return;
+        }
+
+        ConfigurePanelLayoutForPreset(panel, preset);
+        StudyPanel.UpdateLayout();
+        transform.BeginAnimation(TranslateTransform.XProperty, null);
+        transform.BeginAnimation(TranslateTransform.YProperty, null);
+        var currentBounds = GetPanelBounds(panel);
+        var desired = GetPresetTopLeft(preset, currentBounds);
+        var targetX = transform.X + desired.X - currentBounds.Left;
+        var targetY = transform.Y + desired.Y - currentBounds.Top;
+        if (animate)
+        {
+            var duration = new Duration(TimeSpan.FromMilliseconds(230));
+            var ease = new QuarticEase { EasingMode = EasingMode.EaseOut };
+            transform.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(transform.X, targetX, duration)
+            {
+                EasingFunction = ease
+            });
+            var yAnimation = new DoubleAnimation(transform.Y, targetY, duration)
+            {
+                EasingFunction = ease
+            };
+            yAnimation.Completed += (_, _) => UpdateEditorAvoidanceForPanels(animate: false);
+            transform.BeginAnimation(TranslateTransform.YProperty, yAnimation);
+        }
+        else
+        {
+            transform.X = targetX;
+            transform.Y = targetY;
+        }
+
+        if (kind == MovablePanelKind.Scripture)
+        {
+            _scripturePanelPreset = preset;
+        }
+        else
+        {
+            _strongsPanelPreset = preset;
+        }
+
+        Dispatcher.BeginInvoke(() => UpdateEditorAvoidanceForPanels(animate), DispatcherPriority.Render);
+    }
+
+    private Point GetPresetTopLeft(PanelPreset preset, Rect currentBounds)
+    {
+        var width = Math.Max(1, StudyPanel.ActualWidth);
+        var height = Math.Max(1, StudyPanel.ActualHeight);
+        const double edge = 14;
+        return preset switch
+        {
+            PanelPreset.Top => new Point(Math.Max(edge, (width - currentBounds.Width) / 2), edge),
+            PanelPreset.Left => new Point(edge, 0),
+            PanelPreset.Bottom => new Point(Math.Max(edge, (width - currentBounds.Width) / 2), Math.Max(edge, height - currentBounds.Height - edge)),
+            PanelPreset.Float => new Point(Math.Max(edge, (width - currentBounds.Width) / 2), Math.Max(edge, (height - currentBounds.Height) / 2)),
+            _ => new Point(Math.Max(edge, width - currentBounds.Width - edge), 0)
+        };
+    }
+
+    private void ConfigurePanelLayoutForPreset(Border panel, PanelPreset preset)
+    {
+        var height = Math.Max(260, StudyPanel.ActualHeight);
+        switch (preset)
+        {
+            case PanelPreset.Top:
+            case PanelPreset.Bottom:
+                panel.Height = Math.Max(260, height * 0.46);
+                panel.VerticalAlignment = preset == PanelPreset.Top ? VerticalAlignment.Top : VerticalAlignment.Bottom;
+                break;
+            case PanelPreset.Float:
+                panel.Height = Math.Max(260, height * 0.58);
+                panel.VerticalAlignment = VerticalAlignment.Top;
+                break;
+            default:
+                panel.Height = double.NaN;
+                panel.VerticalAlignment = VerticalAlignment.Stretch;
+                break;
+        }
+    }
+
+    private void UpdateEditorAvoidanceForPanels(bool animate)
+    {
+        if (StudyEditorScrollViewer is null || StudyPanel.ActualWidth <= 0)
+        {
+            return;
+        }
+
+        var editorWidth = Math.Max(0, StudyEditorColumn.ActualWidth);
+        var leftAvoidance = 0d;
+        var rightAvoidance = 0d;
+        foreach (var panel in new[] { ScripturePanelRoot, StrongsPanelRoot })
+        {
+            if (panel.Visibility != Visibility.Visible || panel.ActualWidth <= 0)
+            {
+                continue;
+            }
+
+            var bounds = GetPanelBounds(panel);
+            if (bounds == Rect.Empty || bounds.Bottom < 0 || bounds.Top > StudyPanel.ActualHeight)
+            {
+                continue;
+            }
+
+            var overlapLeft = Math.Max(0, Math.Min(editorWidth, bounds.Right) - Math.Max(0, bounds.Left));
+            if (overlapLeft <= 1)
+            {
+                continue;
+            }
+
+            if (bounds.Left + (bounds.Width / 2) < editorWidth / 2)
+            {
+                leftAvoidance = Math.Max(leftAvoidance, Math.Min(editorWidth - 120, bounds.Right + 10));
+            }
+            else
+            {
+                rightAvoidance = Math.Max(rightAvoidance, Math.Min(editorWidth - 120, editorWidth - bounds.Left + 10));
+            }
+        }
+
+        var targetMargin = new Thickness(4 + leftAvoidance, 0, 24 + rightAvoidance, 0);
+        var targetCaretMargin = new Thickness(4 + leftAvoidance, 0, 24 + rightAvoidance, 0);
+        if (!animate)
+        {
+            StudyEditorScrollViewer.Margin = targetMargin;
+            StudyEditorCaretLayer.Margin = targetCaretMargin;
+            return;
+        }
+
+        StudyEditorScrollViewer.BeginAnimation(FrameworkElement.MarginProperty, new ThicknessAnimation
+        {
+            To = targetMargin,
+            Duration = new Duration(TimeSpan.FromMilliseconds(180)),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        });
+        StudyEditorCaretLayer.BeginAnimation(FrameworkElement.MarginProperty, new ThicknessAnimation
+        {
+            To = targetCaretMargin,
+            Duration = new Duration(TimeSpan.FromMilliseconds(180)),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        });
+    }
+
+    private void StudyPanel_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        PositionPanelPresetTargets();
+        if (_draggingPanelKind is null)
+        {
+            UpdateEditorAvoidanceForPanels(animate: false);
+        }
     }
 
     private void HideStrongsPanel(bool animate)
@@ -5473,6 +6146,7 @@ public partial class MainWindow : Window
             StrongsPanelRoot.BeginAnimation(OpacityProperty, null);
             StrongsPanelRoot.Opacity = 0;
             StrongsPanelRoot.Visibility = Visibility.Collapsed;
+            UpdateEditorAvoidanceForPanels(animate: false);
             return;
         }
 
@@ -5511,6 +6185,7 @@ public partial class MainWindow : Window
                 StrongsColumnSplitter.Visibility = Visibility.Collapsed;
                 StrongsPanelRoot.Visibility = Visibility.Collapsed;
                 StrongsPanelRoot.Opacity = 0;
+                UpdateEditorAvoidanceForPanels(animate: true);
             }
         };
 
@@ -5588,6 +6263,7 @@ public partial class MainWindow : Window
                 ScripturePanelRoot.Visibility = Visibility.Collapsed;
                 ScripturePanelRoot.Opacity = 1;
                 ScripturePanelShowButton.Visibility = Visibility.Visible;
+                UpdateEditorAvoidanceForPanels(animate: true);
             }
             else
             {
@@ -5620,6 +6296,7 @@ public partial class MainWindow : Window
                 {
                     EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
                 });
+                Dispatcher.BeginInvoke(() => UpdateEditorAvoidanceForPanels(animate: false), DispatcherPriority.Render);
             }
         };
 

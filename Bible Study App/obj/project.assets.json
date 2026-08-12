@@ -14,11 +14,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\jake1\\OneDrive\\Desktop\\Bible Study App\\Bible Study App\\Bible Study App.csproj",
+      "projectUniqueName": "C:\\Users\\jake1\\Desktop\\Bible\\Bible Study App\\Bible Study App.csproj",
       "projectName": "Bible Study App",
-      "projectPath": "C:\\Users\\jake1\\OneDrive\\Desktop\\Bible Study App\\Bible Study App\\Bible Study App.csproj",
+      "projectPath": "C:\\Users\\jake1\\Desktop\\Bible\\Bible Study App\\Bible Study App.csproj",
       "packagesPath": "C:\\Users\\jake1\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\jake1\\OneDrive\\Desktop\\Bible Study App\\Bible Study App\\obj\\",
+      "outputPath": "C:\\Users\\jake1\\Desktop\\Bible\\Bible Study App\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

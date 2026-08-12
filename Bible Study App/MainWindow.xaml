@@ -2143,11 +2143,13 @@
                         </Border>
                     </Grid>
 
-                    <Grid x:Name="StudyPanel" Visibility="Collapsed">
+                    <Grid x:Name="StudyPanel"
+                          Visibility="Collapsed"
+                          SizeChanged="StudyPanel_SizeChanged">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition x:Name="StudyEditorColumn" Width="*" MinWidth="240" />
                             <ColumnDefinition Width="10" />
-                            <ColumnDefinition x:Name="ScriptureColumn" Width="360" MinWidth="280" MaxWidth="900" />
+                            <ColumnDefinition x:Name="ScriptureColumn" Width="440" MinWidth="280" MaxWidth="900" />
                             <ColumnDefinition x:Name="StrongsSplitterColumn" Width="0" />
                             <ColumnDefinition x:Name="StrongsColumn" Width="0" MinWidth="0" MaxWidth="520" />
                         </Grid.ColumnDefinitions>
@@ -2315,6 +2317,7 @@
                                 Foreground="{DynamicResource AppBackground}"
                                 Padding="12,8"
                                 MinWidth="72"
+                                Height="38"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Top"
                                 Margin="0,0,18,0"
@@ -2339,6 +2342,9 @@
                                 Padding="16"
                                 Margin="0,0,0,0"
                                 RenderTransformOrigin="0.5,0.5">
+                            <Border.CacheMode>
+                                <BitmapCache />
+                            </Border.CacheMode>
                             <Border.RenderTransform>
                                 <TransformGroup>
                                     <ScaleTransform x:Name="ScripturePanelScale"
@@ -2346,6 +2352,9 @@
                                                     ScaleY="1" />
                                     <RotateTransform x:Name="ScripturePanelRotate"
                                                      Angle="0" />
+                                    <TranslateTransform x:Name="ScripturePanelDragTransform"
+                                                         X="0"
+                                                         Y="0" />
                                 </TransformGroup>
                             </Border.RenderTransform>
                             <Grid>
@@ -2373,6 +2382,7 @@
                                             Background="{DynamicResource Mint}"
                                             Foreground="{DynamicResource AppBackground}"
                                             MinWidth="38"
+                                            Height="38"
                                             Padding="10,8"
                                             Margin="0,0,10,0"
                                             Click="ScripturePreviousChapter_Click"
@@ -2381,20 +2391,49 @@
                                                    FontSize="14"
                                                    FontWeight="Black" />
                                     </Button>
-                                    <StackPanel Grid.Column="1">
-                                        <TextBlock x:Name="ScripturePanelTitle"
-                                                   Text="ASV"
-                                                   Foreground="#111111"
-                                                   FontSize="20"
-                                                   FontWeight="Black"
-                                                   TextWrapping="Wrap" />
+                                    <StackPanel Grid.Column="1"
+                                                MaxHeight="82"
+                                                ClipToBounds="True">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border x:Name="ScripturePanelDragHandle"
+                                                    Width="18"
+                                                    Height="30"
+                                                    Background="Transparent"
+                                                    Cursor="SizeAll"
+                                                    ToolTip="Drag scripture panel"
+                                                    PreviewMouseLeftButtonDown="PanelDragHandle_MouseLeftButtonDown"
+                                                    PreviewMouseMove="PanelDragHandle_MouseMove"
+                                                    PreviewMouseLeftButtonUp="PanelDragHandle_MouseLeftButtonUp">
+                                                <TextBlock Text="⋮⋮"
+                                                           Foreground="#111111"
+                                                           FontSize="15"
+                                                           FontWeight="Black"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" />
+                                            </Border>
+                                            <TextBlock x:Name="ScripturePanelTitle"
+                                                       Grid.Column="1"
+                                                       Text="ASV"
+                                                       Foreground="#111111"
+                                                       FontSize="20"
+                                                       FontWeight="Black"
+                                                       MaxHeight="52"
+                                                       TextWrapping="Wrap"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </Grid>
                                         <TextBlock x:Name="ScripturePanelSubtitle"
                                                    Text="Selected chapter"
                                                    Foreground="{DynamicResource PanelBackground}"
                                                    FontSize="12"
                                                    FontWeight="SemiBold"
                                                    Margin="0,4,0,0"
-                                                   TextWrapping="Wrap" />
+                                                   MaxHeight="18"
+                                                   TextWrapping="Wrap"
+                                                   TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                     <Button x:Name="ScriptureNextChapterButton"
                                             Grid.Column="2"
@@ -2402,6 +2441,7 @@
                                             Background="{DynamicResource Mint}"
                                             Foreground="{DynamicResource AppBackground}"
                                             MinWidth="38"
+                                            Height="38"
                                             Padding="10,8"
                                             Margin="10,0,0,0"
                                             Click="ScriptureNextChapter_Click"
@@ -2417,6 +2457,7 @@
                                             Foreground="{DynamicResource AppBackground}"
                                             Click="ScripturePanelToggle_Click"
                                             MinWidth="42"
+                                            Height="38"
                                             Padding="10,8"
                                             Margin="10,0,0,0"
                                             ToolTip="Hide scripture panel">
@@ -2565,7 +2606,21 @@
                                 Padding="16"
                                 Margin="10,0,0,0"
                                 Opacity="0"
-                                Visibility="Collapsed">
+                                Visibility="Collapsed"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.CacheMode>
+                                <BitmapCache />
+                            </Border.CacheMode>
+                            <Border.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform x:Name="StrongsPanelScale"
+                                                    ScaleX="1"
+                                                    ScaleY="1" />
+                                    <TranslateTransform x:Name="StrongsPanelDragTransform"
+                                                         X="0"
+                                                         Y="0" />
+                                </TransformGroup>
+                            </Border.RenderTransform>
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
@@ -2577,10 +2632,33 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
-                                        <TextBlock Text="Strong's"
-                                                   Foreground="#111111"
-                                                   FontSize="20"
-                                                   FontWeight="Black" />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border x:Name="StrongsPanelDragHandle"
+                                                    Width="18"
+                                                    Height="30"
+                                                    Background="Transparent"
+                                                    Cursor="SizeAll"
+                                                    ToolTip="Drag Strong's panel"
+                                                    PreviewMouseLeftButtonDown="PanelDragHandle_MouseLeftButtonDown"
+                                                    PreviewMouseMove="PanelDragHandle_MouseMove"
+                                                    PreviewMouseLeftButtonUp="PanelDragHandle_MouseLeftButtonUp">
+                                                <TextBlock Text="⋮⋮"
+                                                           Foreground="#111111"
+                                                           FontSize="15"
+                                                           FontWeight="Black"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" />
+                                            </Border>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="Strong's"
+                                                       Foreground="#111111"
+                                                       FontSize="20"
+                                                       FontWeight="Black" />
+                                        </Grid>
                                         <TextBlock x:Name="StrongsPanelReferenceText"
                                                    Text="Select a tagged word"
                                                    Foreground="{DynamicResource PanelBackground}"
@@ -2632,6 +2710,32 @@
                                                            FontWeight="SemiBold"
                                                            Margin="0,8,0,0"
                                                            TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border x:Name="StrongsDefinitionSection"
+                                                Background="{DynamicResource TextSecondary}"
+                                                BorderBrush="#111111"
+                                                BorderThickness="1"
+                                                CornerRadius="4"
+                                                Padding="10"
+                                                Margin="0,0,0,10">
+                                            <StackPanel>
+                                                <TextBlock Text="DEFINITION"
+                                                           Foreground="{DynamicResource PanelBackground}"
+                                                           FontSize="11"
+                                                           FontWeight="Black" />
+                                                <FlowDocumentScrollViewer x:Name="StrongsDefinitionViewer"
+                                                                          Margin="0,8,0,0"
+                                                                          Focusable="False"
+                                                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                                          ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                                                    <FlowDocument x:Name="StrongsDefinitionDocument"
+                                                                  PagePadding="0"
+                                                                  FontFamily="Segoe UI"
+                                                                  FontSize="14"
+                                                                  TextAlignment="Left" />
+                                                </FlowDocumentScrollViewer>
                                             </StackPanel>
                                         </Border>
 
@@ -2696,30 +2800,131 @@
                                             </StackPanel>
                                         </Border>
 
-                                        <Border x:Name="StrongsDefinitionSection"
-                                                Background="{DynamicResource TextSecondary}"
-                                                BorderBrush="#111111"
-                                                BorderThickness="1"
-                                                CornerRadius="4"
-                                                Padding="10"
-                                                Margin="0,0,0,2">
-                                            <StackPanel>
-                                                <TextBlock Text="DEFINITION"
-                                                           Foreground="{DynamicResource PanelBackground}"
-                                                           FontSize="11"
-                                                           FontWeight="Black" />
-                                                <TextBlock x:Name="StrongsDefinitionText"
-                                                           Foreground="#111111"
-                                                           FontSize="14"
-                                                           LineHeight="20"
-                                                           Margin="0,7,0,0"
-                                                           TextWrapping="Wrap" />
-                                            </StackPanel>
-                                        </Border>
                                     </StackPanel>
                                 </ScrollViewer>
                             </Grid>
                         </Border>
+
+                        <Canvas x:Name="PanelPresetOverlay"
+                                Grid.Column="0"
+                                Grid.ColumnSpan="5"
+                                Grid.Row="0"
+                                Grid.RowSpan="2"
+                                Panel.ZIndex="240"
+                                ClipToBounds="False"
+                                IsHitTestVisible="False"
+                                Visibility="Collapsed">
+                            <Border x:Name="PanelPresetTop"
+                                    Width="128"
+                                    Height="42"
+                                    Canvas.Left="0"
+                                    Canvas.Top="12"
+                                    Background="#E6DDAA"
+                                    BorderBrush="#111111"
+                                    BorderThickness="1.5"
+                                    CornerRadius="10"
+                                    Cursor="Hand"
+                                    Opacity="0.94"
+                                    Tag="Top"
+                                    MouseEnter="PanelPreset_MouseEnter"
+                                    MouseLeave="PanelPreset_MouseLeave"
+                                    MouseLeftButtonUp="PanelPreset_MouseLeftButtonUp">
+                                <TextBlock Text="TOP"
+                                           Foreground="#111111"
+                                           FontSize="11"
+                                           FontWeight="Black"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Border>
+                            <Border x:Name="PanelPresetLeft"
+                                    Width="128"
+                                    Height="42"
+                                    Canvas.Left="0"
+                                    Canvas.Top="12"
+                                    Background="#E6DDAA"
+                                    BorderBrush="#111111"
+                                    BorderThickness="1.5"
+                                    CornerRadius="10"
+                                    Cursor="Hand"
+                                    Opacity="0.94"
+                                    Tag="Left"
+                                    MouseEnter="PanelPreset_MouseEnter"
+                                    MouseLeave="PanelPreset_MouseLeave"
+                                    MouseLeftButtonUp="PanelPreset_MouseLeftButtonUp">
+                                <TextBlock Text="LEFT"
+                                           Foreground="#111111"
+                                           FontSize="11"
+                                           FontWeight="Black"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Border>
+                            <Border x:Name="PanelPresetRight"
+                                    Width="128"
+                                    Height="42"
+                                    Canvas.Left="0"
+                                    Canvas.Top="12"
+                                    Background="#E6DDAA"
+                                    BorderBrush="#111111"
+                                    BorderThickness="1.5"
+                                    CornerRadius="10"
+                                    Cursor="Hand"
+                                    Opacity="0.94"
+                                    Tag="Right"
+                                    MouseEnter="PanelPreset_MouseEnter"
+                                    MouseLeave="PanelPreset_MouseLeave"
+                                    MouseLeftButtonUp="PanelPreset_MouseLeftButtonUp">
+                                <TextBlock Text="RIGHT"
+                                           Foreground="#111111"
+                                           FontSize="11"
+                                           FontWeight="Black"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Border>
+                            <Border x:Name="PanelPresetBottom"
+                                    Width="128"
+                                    Height="42"
+                                    Canvas.Left="0"
+                                    Canvas.Top="12"
+                                    Background="#E6DDAA"
+                                    BorderBrush="#111111"
+                                    BorderThickness="1.5"
+                                    CornerRadius="10"
+                                    Cursor="Hand"
+                                    Opacity="0.94"
+                                    Tag="Bottom"
+                                    MouseEnter="PanelPreset_MouseEnter"
+                                    MouseLeave="PanelPreset_MouseLeave"
+                                    MouseLeftButtonUp="PanelPreset_MouseLeftButtonUp">
+                                <TextBlock Text="BOTTOM"
+                                           Foreground="#111111"
+                                           FontSize="11"
+                                           FontWeight="Black"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Border>
+                            <Border x:Name="PanelPresetFloat"
+                                    Width="128"
+                                    Height="42"
+                                    Canvas.Left="0"
+                                    Canvas.Top="12"
+                                    Background="#E6DDAA"
+                                    BorderBrush="#111111"
+                                    BorderThickness="1.5"
+                                    CornerRadius="10"
+                                    Cursor="Hand"
+                                    Opacity="0.94"
+                                    Tag="Float"
+                                    MouseEnter="PanelPreset_MouseEnter"
+                                    MouseLeave="PanelPreset_MouseLeave"
+                                    MouseLeftButtonUp="PanelPreset_MouseLeftButtonUp">
+                                <TextBlock Text="FLOAT"
+                                           Foreground="#111111"
+                                           FontSize="11"
+                                           FontWeight="Black"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Border>
+                        </Canvas>
 
                         <Canvas Grid.Column="0"
                                 Grid.ColumnSpan="5"
