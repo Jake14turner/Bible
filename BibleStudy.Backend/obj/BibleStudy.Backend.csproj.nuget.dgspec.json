@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\jake1\\Desktop\\Bible\\BibleStudy.Backend\\BibleStudy.Backend.csproj": {}
+    "C:\\Users\\jake1\\OneDrive\\Desktop\\Bible Study App\\BibleStudy.Backend\\BibleStudy.Backend.csproj": {}
   },
   "projects": {
-    "C:\\Users\\jake1\\Desktop\\Bible\\BibleStudy.Backend\\BibleStudy.Backend.csproj": {
+    "C:\\Users\\jake1\\OneDrive\\Desktop\\Bible Study App\\BibleStudy.Backend\\BibleStudy.Backend.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\jake1\\Desktop\\Bible\\BibleStudy.Backend\\BibleStudy.Backend.csproj",
+        "projectUniqueName": "C:\\Users\\jake1\\OneDrive\\Desktop\\Bible Study App\\BibleStudy.Backend\\BibleStudy.Backend.csproj",
         "projectName": "BibleStudy.Backend",
-        "projectPath": "C:\\Users\\jake1\\Desktop\\Bible\\BibleStudy.Backend\\BibleStudy.Backend.csproj",
+        "projectPath": "C:\\Users\\jake1\\OneDrive\\Desktop\\Bible Study App\\BibleStudy.Backend\\BibleStudy.Backend.csproj",
         "packagesPath": "C:\\Users\\jake1\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\jake1\\Desktop\\Bible\\BibleStudy.Backend\\obj\\",
+        "outputPath": "C:\\Users\\jake1\\OneDrive\\Desktop\\Bible Study App\\BibleStudy.Backend\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

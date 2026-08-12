@@ -498,3 +498,196 @@ C:\Users\jake1\Desktop\Bible\Bible Study App\obj\Debug\net10.0-windows\ref\Bible
 C:\Users\jake1\Desktop\Bible\Bible Study App\bin\Debug\net10.0-windows\Data\tagnt-mat-jhn.txt
 C:\Users\jake1\Desktop\Bible\Bible Study App\bin\Debug\net10.0-windows\Data\tagnt-act-rev.txt
 C:\Users\jake1\Desktop\Bible\Bible Study App\bin\Debug\net10.0-windows\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\bin\Debug\net10.0-windows\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\bin\Debug\net10.0-windows\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\bin\Debug\net10.0-windows\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\Bible Study App\obj\Debug\net10.0-windows\Bible Study App.sourcelink.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-interactions\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-interactions\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-interactions\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-interactions\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-interactions\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-interactions\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-interactions\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-interactions\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-interactions\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-resize-drag-fixes\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-resize-drag-fixes\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-resize-drag-fixes\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-resize-drag-fixes\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-resize-drag-fixes\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-resize-drag-fixes\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-resize-drag-fixes\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-resize-drag-fixes\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-resize-drag-fixes\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-free-canvas-panels\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-free-canvas-panels\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-free-canvas-panels\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-free-canvas-panels\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-free-canvas-panels\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-free-canvas-panels\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-free-canvas-panels\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-free-canvas-panels\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-free-canvas-panels\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-free-panel\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-free-panel\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-free-panel\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-free-panel\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-free-panel\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-free-panel\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-free-panel\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-free-panel\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-free-panel\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-save-slash-strongs\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-save-slash-strongs\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-save-slash-strongs\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-save-slash-strongs\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-save-slash-strongs\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-save-slash-strongs\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-save-slash-strongs\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-save-slash-strongs\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-panel-save-slash-strongs\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-front-geometry-persist\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-front-geometry-persist\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-front-geometry-persist\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-front-geometry-persist\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-front-geometry-persist\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-front-geometry-persist\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-front-geometry-persist\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-front-geometry-persist\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-front-geometry-persist\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-startup-geometry-repair\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-startup-geometry-repair\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-startup-geometry-repair\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-startup-geometry-repair\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-startup-geometry-repair\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-startup-geometry-repair\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-startup-geometry-repair\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-startup-geometry-repair\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-startup-geometry-repair\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-geometry-save-snapshot\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-geometry-save-snapshot\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-geometry-save-snapshot\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-geometry-save-snapshot\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-geometry-save-snapshot\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-geometry-save-snapshot\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-geometry-save-snapshot\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-geometry-save-snapshot\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-geometry-save-snapshot\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-links-button-polish\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-links-button-polish\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-links-button-polish\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-links-button-polish\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-links-button-polish\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-links-button-polish\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-links-button-polish\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-links-button-polish\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-strongs-links-button-polish\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-outline-theme\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-outline-theme\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-outline-theme\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-outline-theme\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-outline-theme\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-outline-theme\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-outline-theme\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-outline-theme\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-outline-theme\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-smooth-panel-resize\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-smooth-panel-resize\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-smooth-panel-resize\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-smooth-panel-resize\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-smooth-panel-resize\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-smooth-panel-resize\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-smooth-panel-resize\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-smooth-panel-resize\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-smooth-panel-resize\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-direct-smoother-resize\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-direct-smoother-resize\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-direct-smoother-resize\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-direct-smoother-resize\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-direct-smoother-resize\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-direct-smoother-resize\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-direct-smoother-resize\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-direct-smoother-resize\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-direct-smoother-resize\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-panel-drag\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-panel-drag\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-panel-drag\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-panel-drag\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-panel-drag\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-panel-drag\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-panel-drag\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-panel-drag\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-panel-drag\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-slash-menu-moved-editor\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-slash-menu-moved-editor\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-slash-menu-moved-editor\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-slash-menu-moved-editor\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-slash-menu-moved-editor\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-slash-menu-moved-editor\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-slash-menu-moved-editor\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-slash-menu-moved-editor\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-slash-menu-moved-editor\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panels\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panels\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panels\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panels\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panels\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panels\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panels\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panels\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panels\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panel-overlay-freeze-fix\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panel-overlay-freeze-fix\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panel-overlay-freeze-fix\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panel-overlay-freeze-fix\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panel-overlay-freeze-fix\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panel-overlay-freeze-fix\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panel-overlay-freeze-fix\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panel-overlay-freeze-fix\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panel-overlay-freeze-fix\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-topbar-row\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-topbar-row\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-topbar-row\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-topbar-row\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-topbar-row\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-topbar-row\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-topbar-row\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-topbar-row\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-editor-topbar-row\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-light-extra-scripture-panel\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-light-extra-scripture-panel\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-light-extra-scripture-panel\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-light-extra-scripture-panel\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-light-extra-scripture-panel\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-light-extra-scripture-panel\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-light-extra-scripture-panel\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-light-extra-scripture-panel\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-light-extra-scripture-panel\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels-v2\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels-v2\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels-v2\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels-v2\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels-v2\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels-v2\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels-v2\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels-v2\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-redesigned-extra-panels-v2\Bible Study App.pdb
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-default-study-layout\Data\asv.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-default-study-layout\Data\tagnt-mat-jhn.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-default-study-layout\Data\tagnt-act-rev.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-default-study-layout\Data\tbesg.txt
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-default-study-layout\Bible Study App.exe
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-default-study-layout\Bible Study App.deps.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-default-study-layout\Bible Study App.runtimeconfig.json
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-default-study-layout\Bible Study App.dll
+C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-default-study-layout\Bible Study App.pdb

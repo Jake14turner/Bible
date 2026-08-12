@@ -96,6 +96,7 @@ public partial class MainWindow : Window
         ["Revelation"] = [20, 29, 22, 11, 14, 17, 17, 13, 21, 11, 19, 17, 18, 20, 8, 21, 18, 24, 21, 15, 27, 21]
     };
     private readonly Dictionary<string, WorkspaceItem> _workspaceByBook = new();
+    private readonly Dictionary<string, ExtraPanelRuntime> _extraPanelRuntimes = new();
     private readonly ObservableCollection<EditorCommandOption> _filteredSlashCommands = new();
     private readonly Brush[] _accentPalette;
     private readonly List<EditorCommandOption> _slashCommands;
@@ -119,7 +120,8 @@ public partial class MainWindow : Window
     private static readonly GreekLexiconEntry EmptyGreekLexiconEntry = new(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
     private enum DefinitionLineKind { Lead, Main, Sub }
     private sealed record DefinitionLine(DefinitionLineKind Kind, string Marker, string Text);
-    private enum MovablePanelKind { Scripture, Strongs }
+    private sealed record VerseReference(string DisplayText, string BookName, int Chapter, int Verse);
+    private enum MovablePanelKind { Editor, Scripture, Strongs }
     private enum PanelPreset { Top, Left, Right, Bottom, Float }
     private static readonly Brush PanelPresetIdleBrush = BrushFrom("#E6DDAA");
     private static readonly Brush PanelPresetIdleBorderBrush = BrushFrom("#111111");
@@ -176,9 +178,26 @@ public partial class MainWindow : Window
     private Point _panelDragPointer;
     private Point _panelDragPendingOffset;
     private bool _panelDragRenderSubscribed;
+    private double _panelDragOriginalOpacity = 1;
     private PanelPreset? _hoveredPanelPreset;
+    private string? _hoveredPanelPresetCommand;
+    private bool _panelPresetTrayOpen;
+    private MovablePanelKind? _resizingPanelKind;
+    private Rect _panelResizeStartBounds;
+    private Point _panelResizeStartPointer;
+    private Vector _panelResizeAccumulatedDelta;
+    private Rect _panelResizePendingBounds;
+    private CacheMode? _panelResizeOriginalCacheMode;
+    private bool _panelResizeRenderSubscribed;
+    private ExtraPanelRuntime? _draggingExtraPanel;
+    private ExtraPanelRuntime? _resizingExtraPanel;
+    private Point _extraPanelDragStartPoint;
+    private Point _extraPanelDragStartOffset;
+    private Rect _extraPanelResizeStartBounds;
+    private Point _extraPanelResizeStartPointer;
     private PanelPreset _scripturePanelPreset = PanelPreset.Right;
     private PanelPreset _strongsPanelPreset = PanelPreset.Right;
+    private int _topPanelZIndex = 130;
 
     public ObservableCollection<BibleBook> BibleBooks { get; } = new();
     public ObservableCollection<BibleBook> OldTestamentBooks { get; } = new();
@@ -438,6 +457,14 @@ public partial class MainWindow : Window
         item.PassageEndChapter = state.PassageEndChapter;
         item.PassageEndVerse = state.PassageEndVerse;
         item.LastEditedAt = state.LastEditedAt;
+        item.EditorPanelGeometry = state.EditorPanelGeometry;
+        item.ScripturePanelGeometry = state.ScripturePanelGeometry;
+        item.StrongsPanelGeometry = state.StrongsPanelGeometry;
+        item.ExtraPanels.Clear();
+        foreach (var extraPanel in state.ExtraPanels)
+        {
+            item.ExtraPanels.Add(extraPanel);
+        }
 
         foreach (var blockState in state.Blocks)
         {
@@ -535,6 +562,7 @@ public partial class MainWindow : Window
         }
 
         _workspaceSaveTimer.Stop();
+        SnapshotCurrentStudyPanelGeometry();
 
         try
         {
@@ -649,6 +677,10 @@ public partial class MainWindow : Window
             PassageEndChapter = item.PassageEndChapter,
             PassageEndVerse = item.PassageEndVerse,
             LastEditedAt = item.LastEditedAt,
+            EditorPanelGeometry = item.EditorPanelGeometry,
+            ScripturePanelGeometry = item.ScripturePanelGeometry,
+            StrongsPanelGeometry = item.StrongsPanelGeometry,
+            ExtraPanels = item.ExtraPanels.ToList(),
             Children = item.Children
                 .Select(CreateWorkspaceItemState)
                 .ToList(),
@@ -1599,6 +1631,11 @@ public partial class MainWindow : Window
         StudyBlockItems.ItemsSource = study.Blocks;
         HideSlashCommandMenu();
         SetActiveNavTab(AppNavTab.BibleStudy);
+        Dispatcher.BeginInvoke(() =>
+        {
+            ApplyStudyPanelGeometry(study);
+            RenderExtraStudyPanels();
+        }, DispatcherPriority.Loaded);
         FocusBlock(study.Blocks[0]);
     }
 
@@ -3839,15 +3876,14 @@ public partial class MainWindow : Window
             }
 
             var phrase = verse.Text.Substring(match.Start, match.Length);
-            var link = new Hyperlink(new Run(phrase))
+            var link = new Span(new Run(phrase))
             {
                 Cursor = Cursors.Hand,
                 Foreground = GetStrongsLinkBrush(linkIndex),
                 FontWeight = FontWeights.SemiBold,
-                TextDecorations = null,
                 Tag = new StrongsSelection(_scriptureVisibleBookName ?? string.Empty, _scriptureVisibleChapter ?? 0, verse.VerseNumber, phrase, match.Entry)
             };
-            link.Click += StrongsPhrase_Click;
+            link.MouseLeftButtonDown += StrongsPhrase_Click;
             paragraph.Inlines.Add(link);
             cursor = match.Start + match.Length;
             linkIndex++;
@@ -4713,6 +4749,7 @@ public partial class MainWindow : Window
 
         if (query == _lastSlashQuery && SlashCommandMenu.Visibility == Visibility.Visible)
         {
+            PositionSlashCommandMenu();
             return;
         }
 
@@ -4763,6 +4800,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        PositionSlashCommandMenu();
         var wasVisible = SlashCommandMenu.Visibility == Visibility.Visible;
         SlashCommandMenu.Visibility = Visibility.Visible;
         if (wasVisible)
@@ -4787,6 +4825,42 @@ public partial class MainWindow : Window
         {
             EasingFunction = ease
         });
+    }
+
+    private void PositionSlashCommandMenu()
+    {
+        if (_activeStudyTextBox is null || SlashCommandLayer is null || SlashCommandMenu is null)
+        {
+            return;
+        }
+
+        var caretIndex = Math.Clamp(_activeStudyTextBox.CaretIndex, 0, _activeStudyTextBox.Text.Length);
+        var caretRect = _activeStudyTextBox.GetRectFromCharacterIndex(caretIndex, trailingEdge: true);
+        if (caretRect.IsEmpty)
+        {
+            caretRect = _activeStudyTextBox.GetRectFromCharacterIndex(caretIndex, trailingEdge: false);
+        }
+
+        if (caretRect.IsEmpty)
+        {
+            return;
+        }
+
+        var caretBottom = _activeStudyTextBox.TranslatePoint(new Point(caretRect.X, caretRect.Bottom), SlashCommandLayer);
+        var targetLeft = caretBottom.X;
+        var targetTop = caretBottom.Y + 8;
+        var layerWidth = Math.Max(1, SlashCommandLayer.ActualWidth);
+        var layerHeight = Math.Max(1, SlashCommandLayer.ActualHeight);
+        var menuWidth = SlashCommandMenu.ActualWidth > 0 ? SlashCommandMenu.ActualWidth : SlashCommandMenu.Width;
+        var menuHeight = SlashCommandMenu.ActualHeight > 0 ? SlashCommandMenu.ActualHeight : 240;
+
+        if (targetTop + menuHeight > layerHeight - 8)
+        {
+            targetTop = _activeStudyTextBox.TranslatePoint(new Point(caretRect.X, caretRect.Top), SlashCommandLayer).Y - menuHeight - 8;
+        }
+
+        Canvas.SetLeft(SlashCommandMenu, Math.Round(Math.Clamp(targetLeft, 8, Math.Max(8, layerWidth - menuWidth - 8))));
+        Canvas.SetTop(SlashCommandMenu, Math.Round(Math.Clamp(targetTop, 8, Math.Max(8, layerHeight - menuHeight - 8))));
     }
 
     private void MoveSlashCommandSelection(int direction)
@@ -5304,16 +5378,16 @@ public partial class MainWindow : Window
             ScripturePanelRoot.BeginAnimation(OpacityProperty, null);
             AnimateScripturePanelCollapseThenClose(ScriptureColumn.ActualWidth);
             ScripturePanelToggleButton.ToolTip = "Show scripture panel";
-            ScripturePanelToggleButtonText.Text = "Show";
+            ScripturePanelToggleButtonText.Text = "X";
             ScripturePanelShowButtonText.Text = "Show";
             return;
         }
 
         var targetWidth = _scripturePanelVisibleWidth.Value <= 0
             ? 440
-            : Math.Max(280, _scripturePanelVisibleWidth.Value);
+            : Math.Clamp(_scripturePanelVisibleWidth.Value, 1, Math.Max(1, StudyPanel.ActualWidth));
         ScriptureColumn.MinWidth = 0;
-        ScriptureColumnSplitter.Visibility = Visibility.Visible;
+        ScriptureColumnSplitter.Visibility = Visibility.Collapsed;
         ScripturePanelRoot.Visibility = Visibility.Collapsed;
         ScripturePanelRoot.Opacity = 1;
         ScripturePanelScale.ScaleX = 0.04;
@@ -5321,8 +5395,16 @@ public partial class MainWindow : Window
         ScripturePanelRotate.Angle = -5;
         ScripturePanelShowButton.Visibility = Visibility.Collapsed;
         AnimateScripturePanelWidth(ScriptureColumn.ActualWidth, targetWidth, hiding: false);
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (_currentStudy is not null)
+            {
+                ApplySavedPanelGeometry(MovablePanelKind.Scripture, _currentStudy.ScripturePanelGeometry);
+                ClampAllPanelsToStudyArea(save: false);
+            }
+        }, DispatcherPriority.Loaded);
         ScripturePanelToggleButton.ToolTip = "Hide scripture panel";
-        ScripturePanelToggleButtonText.Text = "Hide";
+        ScripturePanelToggleButtonText.Text = "X";
         ScripturePanelShowButtonText.Text = "Show";
 
         if (_currentStudy is not null)
@@ -5352,9 +5434,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private void StrongsPhrase_Click(object sender, RoutedEventArgs e)
+    private void StrongsPhrase_Click(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not Hyperlink { Tag: StrongsSelection selection })
+        if (sender is not Span { Tag: StrongsSelection selection })
         {
             return;
         }
@@ -5446,6 +5528,582 @@ public partial class MainWindow : Window
         });
     }
 
+    private void VerseReference_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (sender is Span { Tag: VerseReference reference })
+        {
+            ShowVerseReferencePreview(reference);
+        }
+    }
+
+    private void VerseReference_MouseLeave(object sender, MouseEventArgs e)
+    {
+        HideVerseReferencePreview();
+    }
+
+    private void VerseReference_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not Span { Tag: VerseReference reference })
+        {
+            return;
+        }
+
+        RenderScriptureReferencePanel(reference);
+        e.Handled = true;
+    }
+
+    private void ShowVerseReferencePreview(VerseReference reference)
+    {
+        VerseReferencePopupTitle.Text = $"{reference.BookName} {reference.Chapter}:{reference.Verse}";
+        VerseReferencePopupText.Text = TryGetVerseText(reference, out var verseText)
+            ? verseText
+            : "This verse is not available in the current scripture data.";
+
+        VerseReferencePopup.IsOpen = true;
+        VerseReferencePopupRoot.BeginAnimation(OpacityProperty, null);
+        VerseReferencePopupScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        VerseReferencePopupScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        VerseReferencePopupRoot.Opacity = 0;
+        VerseReferencePopupScale.ScaleX = 0.88;
+        VerseReferencePopupScale.ScaleY = 0.88;
+
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        VerseReferencePopupRoot.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(130))
+        {
+            EasingFunction = ease
+        });
+        VerseReferencePopupScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.88, 1, TimeSpan.FromMilliseconds(170))
+        {
+            EasingFunction = ease
+        });
+        VerseReferencePopupScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.88, 1, TimeSpan.FromMilliseconds(170))
+        {
+            EasingFunction = ease
+        });
+    }
+
+    private void HideVerseReferencePreview()
+    {
+        if (!VerseReferencePopup.IsOpen)
+        {
+            return;
+        }
+
+        var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
+        var fade = new DoubleAnimation(VerseReferencePopupRoot.Opacity, 0, TimeSpan.FromMilliseconds(90))
+        {
+            EasingFunction = ease
+        };
+        fade.Completed += (_, _) => VerseReferencePopup.IsOpen = false;
+        VerseReferencePopupRoot.BeginAnimation(OpacityProperty, fade);
+        VerseReferencePopupScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(VerseReferencePopupScale.ScaleX, 0.92, TimeSpan.FromMilliseconds(90))
+        {
+            EasingFunction = ease
+        });
+        VerseReferencePopupScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(VerseReferencePopupScale.ScaleY, 0.92, TimeSpan.FromMilliseconds(90))
+        {
+            EasingFunction = ease
+        });
+    }
+
+    private bool TryGetVerseText(VerseReference reference, out string verseText)
+    {
+        verseText = string.Empty;
+        if (!TryGetChapterVerses(reference.BookName, reference.Chapter, out var verses)
+            || reference.Verse < 1
+            || reference.Verse > verses.Count)
+        {
+            return false;
+        }
+
+        verseText = verses[reference.Verse - 1];
+        return !string.IsNullOrWhiteSpace(verseText);
+    }
+
+    private void RenderScriptureReferencePanel(VerseReference reference)
+    {
+        if (!TryGetChapterVerses(reference.BookName, reference.Chapter, out _))
+        {
+            ShowVerseReferencePreview(reference);
+            return;
+        }
+
+        AddExtraScripturePanel(reference.BookName, reference.Chapter, reference.Verse, $"Opened from {reference.DisplayText}");
+    }
+
+    private void AddFloatingPanelButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (AddFloatingPanelButton.ContextMenu is { } menu)
+        {
+            menu.PlacementTarget = AddFloatingPanelButton;
+            menu.Placement = PlacementMode.Bottom;
+            menu.IsOpen = true;
+        }
+    }
+
+    private void AddScripturePanelMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var bookName = _scriptureVisibleBookName
+                       ?? _selectedBook?.Name
+                       ?? BibleBooks.FirstOrDefault()?.Name
+                       ?? "Genesis";
+        var chapter = _scriptureVisibleChapter
+                      ?? _currentStudy?.PassageStartChapter
+                      ?? 1;
+        AddExtraScripturePanel(bookName, chapter, _currentStudy?.PassageStartVerse, "Added panel");
+    }
+
+    private void AddNotesPanelMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        AddExtraNotesPanel();
+    }
+
+    private void AddExtraScripturePanel(string bookName, int chapter, int? selectedVerse, string subtitle)
+    {
+        if (_currentStudy is null)
+        {
+            return;
+        }
+
+        var panel = new ExtraStudyPanelState
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Kind = ExtraStudyPanelKind.Scripture,
+            Title = $"{bookName} {chapter}",
+            BookName = bookName,
+            Chapter = chapter,
+            SelectedVerse = selectedVerse,
+            Geometry = CreateDefaultExtraPanelGeometry(_currentStudy.ExtraPanels.Count, width: 430, height: 520)
+        };
+        _currentStudy.ExtraPanels.Add(panel);
+        RenderExtraStudyPanel(panel, animate: true);
+        QueueWorkspaceSave();
+        ShowToast(string.IsNullOrWhiteSpace(subtitle) ? "Scripture panel added" : "Scripture panel opened");
+    }
+
+    private void AddExtraNotesPanel()
+    {
+        if (_currentStudy is null)
+        {
+            return;
+        }
+
+        var panel = new ExtraStudyPanelState
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Kind = ExtraStudyPanelKind.Notes,
+            Title = "Notes",
+            Geometry = CreateDefaultExtraPanelGeometry(_currentStudy.ExtraPanels.Count, width: 420, height: 360)
+        };
+        _currentStudy.ExtraPanels.Add(panel);
+        RenderExtraStudyPanel(panel, animate: true);
+        QueueWorkspaceSave();
+        ShowToast("Notes panel added");
+    }
+
+    private PanelGeometryState CreateDefaultExtraPanelGeometry(int index, double width, double height)
+    {
+        var maxWidth = Math.Max(1, StudyPanel.ActualWidth);
+        var maxHeight = Math.Max(1, StudyPanel.ActualHeight);
+        var safeWidth = Math.Min(width, maxWidth);
+        var safeHeight = Math.Min(height, maxHeight);
+        var offset = 34 * (index % 7);
+        return new PanelGeometryState
+        {
+            X = Math.Round(Math.Clamp(48 + offset, 0, Math.Max(0, maxWidth - safeWidth)), 2),
+            Y = Math.Round(Math.Clamp(56 + offset, 0, Math.Max(0, maxHeight - safeHeight)), 2),
+            Width = Math.Round(safeWidth, 2),
+            Height = Math.Round(safeHeight, 2)
+        };
+    }
+
+    private void RenderExtraStudyPanels()
+    {
+        foreach (var runtime in _extraPanelRuntimes.Values.ToList())
+        {
+            ExtraStudyPanelLayer.Children.Remove(runtime.Root);
+        }
+
+        _extraPanelRuntimes.Clear();
+        if (_currentStudy is null)
+        {
+            return;
+        }
+
+        foreach (var panel in _currentStudy.ExtraPanels)
+        {
+            RenderExtraStudyPanel(panel, animate: false);
+        }
+    }
+
+    private void RenderExtraStudyPanel(ExtraStudyPanelState state, bool animate)
+    {
+        if (_extraPanelRuntimes.Remove(state.Id, out var existing))
+        {
+            ExtraStudyPanelLayer.Children.Remove(existing.Root);
+        }
+
+        var transform = new TranslateTransform();
+        var scale = new ScaleTransform(1, 1);
+        var root = new Border
+        {
+            Width = Math.Max(1, state.Geometry.Width),
+            Height = Math.Max(1, state.Geometry.Height),
+            MinWidth = 1,
+            MinHeight = 1,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Background = state.Kind == ExtraStudyPanelKind.Notes ? GetResourceBrush("AppBackground") : GetResourceBrush("TextPrimary"),
+            BorderBrush = GetResourceBrush("SidebarBackground"),
+            BorderThickness = new Thickness(1.5),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(0),
+            UseLayoutRounding = true,
+            SnapsToDevicePixels = true,
+            Tag = state,
+            RenderTransformOrigin = new Point(0.5, 0.5),
+            RenderTransform = new TransformGroup
+            {
+                Children =
+                {
+                    scale,
+                    transform
+                }
+            }
+        };
+        Grid.SetColumn(root, 0);
+        Grid.SetColumnSpan(root, 5);
+        Grid.SetRow(root, 0);
+        Grid.SetRowSpan(root, 2);
+        Panel.SetZIndex(root, ++_topPanelZIndex);
+
+        var geometry = ClampExtraPanelGeometry(state.Geometry);
+        state.Geometry = geometry;
+        root.Width = geometry.Width;
+        root.Height = geometry.Height;
+        transform.X = geometry.X;
+        transform.Y = geometry.Y;
+
+        var grid = new Grid();
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+        var header = CreateExtraPanelHeader(state);
+        header.MouseLeftButtonDown += ExtraPanelHeader_MouseLeftButtonDown;
+        header.MouseMove += ExtraPanelHeader_MouseMove;
+        header.MouseLeftButtonUp += ExtraPanelHeader_MouseLeftButtonUp;
+        Grid.SetRow(header, 0);
+        grid.Children.Add(header);
+
+        var content = state.Kind == ExtraStudyPanelKind.Scripture
+            ? CreateExtraScriptureContent(state)
+            : CreateExtraNotesContent(state);
+        Grid.SetRow(content, 1);
+        grid.Children.Add(content);
+
+        var resize = new Thumb
+        {
+            Width = 22,
+            Height = 22,
+            Cursor = Cursors.SizeNWSE,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, -8, -8),
+            Background = Brushes.Transparent,
+            Tag = state
+        };
+        resize.DragStarted += ExtraPanelResize_DragStarted;
+        resize.DragDelta += ExtraPanelResize_DragDelta;
+        resize.DragCompleted += ExtraPanelResize_DragCompleted;
+        Grid.SetRowSpan(resize, 2);
+        Panel.SetZIndex(resize, 40);
+        grid.Children.Add(resize);
+
+        root.Child = grid;
+        root.PreviewMouseDown += ExtraPanelRoot_PreviewMouseDown;
+        ExtraStudyPanelLayer.Children.Add(root);
+        _extraPanelRuntimes[state.Id] = new ExtraPanelRuntime(state, root, transform);
+
+        if (animate)
+        {
+            root.Opacity = 0;
+            scale.ScaleX = 0.96;
+            scale.ScaleY = 0.96;
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            root.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150)) { EasingFunction = ease });
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.96, 1, TimeSpan.FromMilliseconds(180)) { EasingFunction = ease });
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.96, 1, TimeSpan.FromMilliseconds(180)) { EasingFunction = ease });
+        }
+    }
+
+
+    private Grid CreateExtraPanelHeader(ExtraStudyPanelState state)
+    {
+        var header = new Grid
+        {
+            Background = GetResourceBrush("PanelBackground"),
+            Cursor = Cursors.SizeAll,
+            MinHeight = 44,
+            Tag = state
+        };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        header.Children.Add(new TextBlock
+        {
+            Text = state.Kind == ExtraStudyPanelKind.Scripture ? $"{state.BookName} {state.Chapter}" : state.Title,
+            Foreground = GetResourceBrush("TextPrimary"),
+            FontSize = 15,
+            FontWeight = FontWeights.Black,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(12, 0, 10, 0),
+            TextTrimming = TextTrimming.CharacterEllipsis
+        });
+
+        var close = new Button
+        {
+            Style = (Style)FindResource("IconButtonStyle"),
+            Background = GetResourceBrush("TextSecondary"),
+            Foreground = GetResourceBrush("TextPrimary"),
+            Width = 38,
+            Height = 34,
+            MinWidth = 38,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 5, 8, 5),
+            ToolTip = "Close panel",
+            Tag = state,
+            Content = new TextBlock { Text = "X", FontSize = 13, FontWeight = FontWeights.Black }
+        };
+        close.Click += ExtraPanelClose_Click;
+        Grid.SetColumn(close, 1);
+        header.Children.Add(close);
+        return header;
+    }
+
+    private UIElement CreateExtraScriptureContent(ExtraStudyPanelState state)
+    {
+        var document = new FlowDocument
+        {
+            PagePadding = new Thickness(0),
+            FontFamily = new FontFamily("Segoe UI"),
+            FontSize = ScriptureFontSizeSlider.Value,
+            TextAlignment = TextAlignment.Left,
+            Foreground = new SolidColorBrush(Color.FromRgb(17, 17, 17))
+        };
+
+        if (!string.IsNullOrWhiteSpace(state.BookName)
+            && state.Chapter is int chapter
+            && TryGetChapterVerses(state.BookName, chapter, out var verses))
+        {
+            for (var index = 0; index < verses.Count; index++)
+            {
+                var verseNumber = index + 1;
+                var paragraph = new Paragraph { Margin = new Thickness(0, 0, 0, 10), LineHeight = 24 };
+                paragraph.Inlines.Add(new Run($"{verseNumber} ")
+                {
+                    FontWeight = FontWeights.Black,
+                    Foreground = GetResourceBrush("PanelBackground")
+                });
+                paragraph.Inlines.Add(new Run(verses[index]));
+                if (state.SelectedVerse == verseNumber)
+                {
+                    paragraph.Background = GetResourceBrush("TextSecondary");
+                }
+
+                document.Blocks.Add(paragraph);
+            }
+        }
+        else
+        {
+            document.Blocks.Add(new Paragraph(new Run("This chapter is not available in the current scripture data.")));
+        }
+
+        return new RichTextBox(document)
+        {
+            IsReadOnly = true,
+            IsDocumentEnabled = true,
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            Foreground = new SolidColorBrush(Color.FromRgb(17, 17, 17)),
+            SelectionBrush = GetResourceBrush("Mint"),
+            SelectionOpacity = 0.45,
+            Padding = new Thickness(14),
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+    }
+
+    private UIElement CreateExtraNotesContent(ExtraStudyPanelState state)
+    {
+        var textBox = new TextBox
+        {
+            Text = state.NotesText,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            Foreground = GetResourceBrush("TextPrimary"),
+            CaretBrush = GetResourceBrush("Mint"),
+            FontSize = 16,
+            FontFamily = new FontFamily("Segoe UI"),
+            Padding = new Thickness(14),
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Tag = state
+        };
+        textBox.TextChanged += ExtraNotesTextBox_TextChanged;
+        return textBox;
+    }
+
+    private PanelGeometryState ClampExtraPanelGeometry(PanelGeometryState geometry)
+    {
+        var maxWidth = Math.Max(1, StudyPanel.ActualWidth);
+        var maxHeight = Math.Max(1, StudyPanel.ActualHeight);
+        var width = Math.Round(Math.Clamp(geometry.Width <= 0 ? 360 : geometry.Width, 1, maxWidth));
+        var height = Math.Round(Math.Clamp(geometry.Height <= 0 ? 320 : geometry.Height, 1, maxHeight));
+        return new PanelGeometryState
+        {
+            X = Math.Round(Math.Clamp(geometry.X, 0, Math.Max(0, maxWidth - width)), 2),
+            Y = Math.Round(Math.Clamp(geometry.Y, 0, Math.Max(0, maxHeight - height)), 2),
+            Width = width,
+            Height = height
+        };
+    }
+
+    private void ExtraPanelRoot_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is Border { Tag: ExtraStudyPanelState state } && _extraPanelRuntimes.TryGetValue(state.Id, out var runtime))
+        {
+            Panel.SetZIndex(runtime.Root, ++_topPanelZIndex);
+        }
+    }
+
+    private void ExtraPanelClose_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentStudy is null || sender is not FrameworkElement { Tag: ExtraStudyPanelState state })
+        {
+            return;
+        }
+
+        _currentStudy.ExtraPanels.Remove(state);
+        if (_extraPanelRuntimes.Remove(state.Id, out var runtime))
+        {
+            var fade = new DoubleAnimation(runtime.Root.Opacity, 0, TimeSpan.FromMilliseconds(110))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+            };
+            fade.Completed += (_, _) => ExtraStudyPanelLayer.Children.Remove(runtime.Root);
+            runtime.Root.BeginAnimation(OpacityProperty, fade);
+        }
+
+        QueueWorkspaceSave();
+    }
+
+    private void ExtraNotesTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (sender is TextBox { Tag: ExtraStudyPanelState state } textBox)
+        {
+            state.NotesText = textBox.Text;
+            QueueWorkspaceSave();
+        }
+    }
+
+    private void ExtraPanelHeader_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: ExtraStudyPanelState state }
+            || !_extraPanelRuntimes.TryGetValue(state.Id, out var runtime))
+        {
+            return;
+        }
+
+        _draggingExtraPanel = runtime;
+        _extraPanelDragStartPoint = e.GetPosition(StudyPanel);
+        _extraPanelDragStartOffset = new Point(runtime.Transform.X, runtime.Transform.Y);
+        Panel.SetZIndex(runtime.Root, ++_topPanelZIndex);
+        runtime.Root.CaptureMouse();
+        Mouse.OverrideCursor = Cursors.SizeAll;
+        e.Handled = true;
+    }
+
+    private void ExtraPanelHeader_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_draggingExtraPanel is null || e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var pointer = e.GetPosition(StudyPanel);
+        var delta = pointer - _extraPanelDragStartPoint;
+        var geometry = ClampExtraPanelGeometry(new PanelGeometryState
+        {
+            X = _extraPanelDragStartOffset.X + delta.X,
+            Y = _extraPanelDragStartOffset.Y + delta.Y,
+            Width = _draggingExtraPanel.Root.Width,
+            Height = _draggingExtraPanel.Root.Height
+        });
+        _draggingExtraPanel.Transform.X = geometry.X;
+        _draggingExtraPanel.Transform.Y = geometry.Y;
+        _draggingExtraPanel.State.Geometry = geometry;
+        e.Handled = true;
+    }
+
+    private void ExtraPanelHeader_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_draggingExtraPanel is null)
+        {
+            return;
+        }
+
+        _draggingExtraPanel.Root.ReleaseMouseCapture();
+        _draggingExtraPanel = null;
+        Mouse.OverrideCursor = null;
+        QueueWorkspaceSave();
+        e.Handled = true;
+    }
+
+    private void ExtraPanelResize_DragStarted(object sender, DragStartedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: ExtraStudyPanelState state }
+            || !_extraPanelRuntimes.TryGetValue(state.Id, out var runtime))
+        {
+            return;
+        }
+
+        _resizingExtraPanel = runtime;
+        _extraPanelResizeStartPointer = Mouse.GetPosition(StudyPanel);
+        _extraPanelResizeStartBounds = new Rect(runtime.Transform.X, runtime.Transform.Y, runtime.Root.Width, runtime.Root.Height);
+        Panel.SetZIndex(runtime.Root, ++_topPanelZIndex);
+    }
+
+    private void ExtraPanelResize_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        if (_resizingExtraPanel is null)
+        {
+            return;
+        }
+
+        var pointer = Mouse.GetPosition(StudyPanel);
+        var delta = pointer - _extraPanelResizeStartPointer;
+        var geometry = ClampExtraPanelGeometry(new PanelGeometryState
+        {
+            X = _extraPanelResizeStartBounds.Left,
+            Y = _extraPanelResizeStartBounds.Top,
+            Width = _extraPanelResizeStartBounds.Width + delta.X,
+            Height = _extraPanelResizeStartBounds.Height + delta.Y
+        });
+        _resizingExtraPanel.Root.Width = geometry.Width;
+        _resizingExtraPanel.Root.Height = geometry.Height;
+        _resizingExtraPanel.Transform.X = geometry.X;
+        _resizingExtraPanel.Transform.Y = geometry.Y;
+        _resizingExtraPanel.State.Geometry = geometry;
+    }
+
+    private void ExtraPanelResize_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        _resizingExtraPanel = null;
+        QueueWorkspaceSave();
+    }
+
     private static string FirstNonEmpty(params string?[] values)
     {
         return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
@@ -5490,11 +6148,20 @@ public partial class MainWindow : Window
             StrongsPanelRoot.Visibility = Visibility.Visible;
             StrongsPanelRoot.Opacity = 0;
         }
+        BringPanelToFront(MovablePanelKind.Strongs);
 
         var targetWidth = _strongsPanelVisibleWidth.Value <= 0
             ? 330
-            : Math.Clamp(_strongsPanelVisibleWidth.Value, 220, 520);
+            : Math.Clamp(_strongsPanelVisibleWidth.Value, 1, Math.Max(1, StudyPanel.ActualWidth));
         AnimateStrongsPanelWidth(StrongsColumn.ActualWidth, targetWidth, show: true);
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (_currentStudy is not null)
+            {
+                ApplySavedPanelGeometry(MovablePanelKind.Strongs, _currentStudy.StrongsPanelGeometry);
+                ClampAllPanelsToStudyArea(save: false);
+            }
+        }, DispatcherPriority.Loaded);
     }
 
     private void UpdateStrongsSectionVisibility()
@@ -5592,42 +6259,94 @@ public partial class MainWindow : Window
         }));
     }
 
-    private static void AddDefinitionTextRuns(Paragraph paragraph, string text, bool boldLeadPhrase)
+    private void AddDefinitionTextRuns(Paragraph paragraph, string text, bool boldLeadPhrase)
     {
         var trimmed = text.Trim();
         if (!boldLeadPhrase)
         {
-            paragraph.Inlines.Add(new Run(trimmed)
-            {
-                FontSize = 15,
-                FontWeight = FontWeights.SemiBold
-            });
+            AddDefinitionRunsWithReferences(paragraph, trimmed, 15, FontWeights.SemiBold);
             return;
         }
 
         var leadLength = FindDefinitionLeadPhraseLength(trimmed);
         if (leadLength <= 0)
         {
-            paragraph.Inlines.Add(new Run(trimmed)
-            {
-                FontSize = 15
-            });
+            AddDefinitionRunsWithReferences(paragraph, trimmed, 15, FontWeights.Normal);
             return;
         }
 
-        paragraph.Inlines.Add(new Run(trimmed[..leadLength])
-        {
-            FontSize = paragraph.LineHeight >= 22 ? 16 : 15,
-            FontWeight = FontWeights.Black
-        });
+        AddDefinitionRunsWithReferences(paragraph, trimmed[..leadLength], paragraph.LineHeight >= 22 ? 16 : 15, FontWeights.Black);
 
         if (leadLength < trimmed.Length)
         {
-            paragraph.Inlines.Add(new Run(trimmed[leadLength..])
+            AddDefinitionRunsWithReferences(paragraph, trimmed[leadLength..], paragraph.LineHeight >= 22 ? 15 : 14, FontWeights.Normal);
+        }
+    }
+
+    private void AddDefinitionRunsWithReferences(Paragraph paragraph, string text, double fontSize, FontWeight fontWeight)
+    {
+        const string referencePattern = @"(?<![A-Za-z0-9])(?<book>[1-3]?[A-Za-z]{2,4})\.(?<chapter>\d{1,3}):(?<verse>\d{1,3})(?![A-Za-z0-9])";
+        var cursor = 0;
+        foreach (Match match in Regex.Matches(text, referencePattern, RegexOptions.CultureInvariant))
+        {
+            if (match.Index > cursor)
             {
-                FontSize = paragraph.LineHeight >= 22 ? 15 : 14
+                paragraph.Inlines.Add(new Run(text[cursor..match.Index])
+                {
+                    FontSize = fontSize,
+                    FontWeight = fontWeight
+                });
+            }
+
+            if (TryCreateVerseReference(match, out var reference))
+            {
+                var link = new Span(new Run(reference.DisplayText))
+                {
+                    Cursor = Cursors.Hand,
+                    FontSize = fontSize,
+                    FontWeight = FontWeights.Black,
+                    Foreground = GetResourceBrush("PanelBackground"),
+                    Tag = reference
+                };
+                link.MouseEnter += VerseReference_MouseEnter;
+                link.MouseLeave += VerseReference_MouseLeave;
+                link.MouseLeftButtonDown += VerseReference_MouseLeftButtonDown;
+                paragraph.Inlines.Add(link);
+            }
+            else
+            {
+                paragraph.Inlines.Add(new Run(match.Value)
+                {
+                    FontSize = fontSize,
+                    FontWeight = fontWeight
+                });
+            }
+
+            cursor = match.Index + match.Length;
+        }
+
+        if (cursor < text.Length)
+        {
+            paragraph.Inlines.Add(new Run(text[cursor..])
+            {
+                FontSize = fontSize,
+                FontWeight = fontWeight
             });
         }
+    }
+
+    private static bool TryCreateVerseReference(Match match, out VerseReference reference)
+    {
+        reference = new VerseReference(string.Empty, string.Empty, 0, 0);
+        if (!TryMapTagntBookCode(match.Groups["book"].Value, out var bookName)
+            || !int.TryParse(match.Groups["chapter"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var chapter)
+            || !int.TryParse(match.Groups["verse"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var verse))
+        {
+            return false;
+        }
+
+        reference = new VerseReference(match.Value, bookName, chapter, verse);
+        return true;
     }
 
     private static int FindDefinitionLeadPhraseLength(string text)
@@ -5718,11 +6437,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        var kind = ReferenceEquals(handle, ScripturePanelDragHandle)
-            ? MovablePanelKind.Scripture
-            : ReferenceEquals(handle, StrongsPanelDragHandle)
-                ? MovablePanelKind.Strongs
-                : (MovablePanelKind?)null;
+        if (IsPanelHeaderControl(e.OriginalSource as DependencyObject))
+        {
+            return;
+        }
+
+        var kind = TryGetPanelKindFromElement(handle);
         if (kind is null || kind == MovablePanelKind.Strongs && StrongsPanelRoot.Visibility != Visibility.Visible)
         {
             return;
@@ -5730,21 +6450,36 @@ public partial class MainWindow : Window
 
         _draggingPanelKind = kind;
         _draggingPanelHandle = handle;
-        _draggingPanelTransform = kind == MovablePanelKind.Scripture
-            ? ScripturePanelDragTransform
-            : StrongsPanelDragTransform;
-        _draggingPanelTransform.BeginAnimation(TranslateTransform.XProperty, null);
-        _draggingPanelTransform.BeginAnimation(TranslateTransform.YProperty, null);
+        _draggingPanelTransform = GetPanelTransform(kind.Value);
+        CommitTranslateTransformPosition(_draggingPanelTransform);
         _panelDragStartPoint = e.GetPosition(StudyPanel);
         _panelDragPointer = _panelDragStartPoint;
         _panelDragStartOffset = new Point(_draggingPanelTransform.X, _draggingPanelTransform.Y);
         _panelDragPendingOffset = _panelDragStartOffset;
         _hoveredPanelPreset = null;
-        Panel.SetZIndex(GetPanelRoot(kind.Value), 300);
-        ShowPanelPresetOverlay();
+        _hoveredPanelPresetCommand = null;
+        var panel = GetPanelRoot(kind.Value);
+        _panelDragOriginalOpacity = panel.Opacity;
+        BringPanelToFront(kind.Value);
+        panel.BeginAnimation(OpacityProperty, null);
+        panel.Opacity = kind == MovablePanelKind.Editor ? _panelDragOriginalOpacity : 0.56;
+        if (kind != MovablePanelKind.Editor)
+        {
+            ShowPanelPresetOverlay();
+        }
         handle.CaptureMouse();
         Mouse.OverrideCursor = Cursors.SizeAll;
         e.Handled = true;
+    }
+
+    private static void CommitTranslateTransformPosition(TranslateTransform transform)
+    {
+        var currentX = transform.X;
+        var currentY = transform.Y;
+        transform.BeginAnimation(TranslateTransform.XProperty, null);
+        transform.BeginAnimation(TranslateTransform.YProperty, null);
+        transform.X = currentX;
+        transform.Y = currentY;
     }
 
     private void PanelDragHandle_MouseMove(object sender, MouseEventArgs e)
@@ -5780,9 +6515,17 @@ public partial class MainWindow : Window
             return;
         }
 
-        _draggingPanelTransform.X = _panelDragPendingOffset.X;
-        _draggingPanelTransform.Y = _panelDragPendingOffset.Y;
-        SetPanelPresetHighlight(_hoveredPanelPreset ?? GetNearestPanelPreset());
+        var clampedOffset = ClampPanelOffset(_draggingPanelKind.Value, _panelDragPendingOffset);
+        _draggingPanelTransform.X = clampedOffset.X;
+        _draggingPanelTransform.Y = clampedOffset.Y;
+        if (_draggingPanelKind != MovablePanelKind.Editor)
+        {
+            UpdatePanelSnapBarForPointer(_panelDragPointer);
+        }
+        else if (SlashCommandMenu.Visibility == Visibility.Visible)
+        {
+            PositionSlashCommandMenu();
+        }
     }
 
     private void PanelDragHandle_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -5793,7 +6536,8 @@ public partial class MainWindow : Window
         }
 
         var kind = _draggingPanelKind.Value;
-        var preset = _hoveredPanelPreset ?? GetNearestPanelPreset();
+        var preset = _hoveredPanelPreset;
+        var presetCommand = _hoveredPanelPresetCommand;
         StopPanelDragRendering();
         if (_draggingPanelHandle?.IsMouseCaptured == true)
         {
@@ -5804,10 +6548,158 @@ public partial class MainWindow : Window
         _draggingPanelKind = null;
         _draggingPanelHandle = null;
         _draggingPanelTransform = null;
-        Panel.SetZIndex(GetPanelRoot(kind), kind == MovablePanelKind.Strongs ? 120 : 110);
-        HidePanelPresetOverlay();
-        ApplyPanelPreset(kind, preset, animate: true);
+        var panel = GetPanelRoot(kind);
+        BringPanelToFront(kind);
+        panel.BeginAnimation(OpacityProperty, new DoubleAnimation(panel.Opacity, _panelDragOriginalOpacity, TimeSpan.FromMilliseconds(140))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        });
+        if (kind != MovablePanelKind.Editor)
+        {
+            HidePanelPresetOverlay();
+        }
+        if (presetCommand == "PairSplit")
+        {
+            ApplyPanelPairPreset(split: true);
+        }
+        else if (presetCommand == "PairStack")
+        {
+            ApplyPanelPairPreset(split: false);
+        }
+        else if (preset is not null)
+        {
+            ApplyPanelPreset(kind, preset.Value, animate: true);
+        }
+        else
+        {
+            SaveCurrentPanelGeometry(kind, flush: true);
+            UpdateEditorAvoidanceForPanels(animate: true);
+        }
         e.Handled = true;
+    }
+
+    private MovablePanelKind? TryGetPanelKindFromElement(DependencyObject element)
+    {
+        var panel = FindOwningPanelRoot(element);
+        return ReferenceEquals(panel, StudyEditorPanelRoot)
+            ? MovablePanelKind.Editor
+            : ReferenceEquals(panel, ScripturePanelRoot)
+            || ReferenceEquals(element, ScripturePanelTopBar)
+            || ReferenceEquals(element, ScripturePanelDragHandle)
+                ? MovablePanelKind.Scripture
+                : ReferenceEquals(panel, StrongsPanelRoot)
+                  || ReferenceEquals(element, StrongsPanelTopBar)
+                  || ReferenceEquals(element, StrongsPanelDragHandle)
+                    ? MovablePanelKind.Strongs
+                    : (MovablePanelKind?)null;
+    }
+
+    private Border? FindOwningPanelRoot(DependencyObject? element)
+    {
+        while (element is not null)
+        {
+            if (ReferenceEquals(element, ScripturePanelRoot))
+            {
+                return ScripturePanelRoot;
+            }
+
+            if (ReferenceEquals(element, StudyEditorPanelRoot))
+            {
+                return StudyEditorPanelRoot;
+            }
+
+            if (ReferenceEquals(element, StrongsPanelRoot))
+            {
+                return StrongsPanelRoot;
+            }
+
+            element = VisualTreeHelper.GetParent(element);
+        }
+
+        return null;
+    }
+
+    private static bool IsPanelHeaderControl(DependencyObject? source)
+    {
+        while (source is not null)
+        {
+            if (source is ButtonBase or Slider or TextBox or ComboBox or ScrollBar)
+            {
+                return true;
+            }
+
+            source = VisualTreeHelper.GetParent(source);
+        }
+
+        return false;
+    }
+
+    private void PanelRoot_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is DependencyObject source && TryGetPanelKindFromElement(source) is { } kind)
+        {
+            BringPanelToFront(kind);
+        }
+    }
+
+    private void SnapshotCurrentStudyPanelGeometry()
+    {
+        if (_currentStudy is null || StudyPanel?.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        SnapshotPanelGeometry(MovablePanelKind.Editor);
+        if (ScripturePanelRoot.Visibility == Visibility.Visible)
+        {
+            SnapshotPanelGeometry(MovablePanelKind.Scripture);
+        }
+
+        if (StrongsPanelRoot.Visibility == Visibility.Visible)
+        {
+            SnapshotPanelGeometry(MovablePanelKind.Strongs);
+        }
+    }
+
+    private void SnapshotPanelGeometry(MovablePanelKind kind)
+    {
+        if (_currentStudy is not { } study)
+        {
+            return;
+        }
+
+        var panel = GetPanelRoot(kind);
+        var bounds = GetPanelBounds(panel);
+        if (bounds == Rect.Empty || bounds.Width <= 0 || bounds.Height <= 0)
+        {
+            return;
+        }
+
+        var geometry = new PanelGeometryState
+        {
+            X = Math.Round(bounds.Left, 2),
+            Y = Math.Round(bounds.Top, 2),
+            Width = Math.Round(bounds.Width, 2),
+            Height = Math.Round(bounds.Height, 2)
+        };
+
+        switch (kind)
+        {
+            case MovablePanelKind.Editor:
+                study.EditorPanelGeometry = geometry;
+                break;
+            case MovablePanelKind.Scripture:
+                study.ScripturePanelGeometry = geometry;
+                break;
+            case MovablePanelKind.Strongs:
+                study.StrongsPanelGeometry = geometry;
+                break;
+        }
+    }
+
+    private void BringPanelToFront(MovablePanelKind kind)
+    {
+        Panel.SetZIndex(GetPanelRoot(kind), ++_topPanelZIndex);
     }
 
     private void StopPanelDragRendering()
@@ -5827,9 +6719,13 @@ public partial class MainWindow : Window
         }
 
         PanelPresetOverlay.Visibility = Visibility.Visible;
-        PanelPresetOverlay.IsHitTestVisible = true;
+        PanelPresetOverlay.IsHitTestVisible = false;
+        PanelPresetTray.Visibility = Visibility.Collapsed;
+        _panelPresetTrayOpen = false;
         PositionPanelPresetTargets();
-        SetPanelPresetHighlight(GetNearestPanelPreset());
+        AnimatePanelSnapBar(open: false);
+        SetPanelPresetHighlight(null);
+        HidePanelPresetPreviews();
     }
 
     private void HidePanelPresetOverlay()
@@ -5842,30 +6738,33 @@ public partial class MainWindow : Window
         PanelPresetOverlay.Visibility = Visibility.Collapsed;
         PanelPresetOverlay.IsHitTestVisible = false;
         _hoveredPanelPreset = null;
+        _hoveredPanelPresetCommand = null;
+        _panelPresetTrayOpen = false;
+        PanelPresetTray.Visibility = Visibility.Collapsed;
+        HidePanelPresetPreviews();
         foreach (var target in new[] { PanelPresetTop, PanelPresetLeft, PanelPresetRight, PanelPresetBottom, PanelPresetFloat })
         {
             target.Background = PanelPresetIdleBrush;
             target.BorderBrush = PanelPresetIdleBorderBrush;
+        }
+        foreach (var target in new[] { PanelPresetBothSplit, PanelPresetBothStack })
+        {
+            target.Background = PanelPresetIdleBrush;
+            target.BorderBrush = PanelPresetIdleBorderBrush;
+            target.Opacity = 0.84;
         }
     }
 
     private void PositionPanelPresetTargets()
     {
         var width = Math.Max(360, StudyPanel.ActualWidth);
-        var height = Math.Max(260, StudyPanel.ActualHeight);
-        const double targetWidth = 128;
-        const double targetHeight = 42;
-        const double edge = 14;
-        Canvas.SetLeft(PanelPresetTop, (width - targetWidth) / 2);
-        Canvas.SetTop(PanelPresetTop, edge);
-        Canvas.SetLeft(PanelPresetBottom, (width - targetWidth) / 2);
-        Canvas.SetTop(PanelPresetBottom, Math.Max(edge, height - targetHeight - edge));
-        Canvas.SetLeft(PanelPresetLeft, edge);
-        Canvas.SetTop(PanelPresetLeft, (height - targetHeight) / 2);
-        Canvas.SetLeft(PanelPresetRight, Math.Max(edge, width - targetWidth - edge));
-        Canvas.SetTop(PanelPresetRight, (height - targetHeight) / 2);
-        Canvas.SetLeft(PanelPresetFloat, (width - targetWidth) / 2);
-        Canvas.SetTop(PanelPresetFloat, Math.Max(edge, (height - targetHeight) / 2 - targetHeight - 12));
+        var barWidth = StrongsPanelRoot.Visibility == Visibility.Visible ? 760 : 600;
+        PanelSnapBar.Width = Math.Min(barWidth, Math.Max(320, width - 28));
+        Canvas.SetLeft(PanelSnapBar, Math.Max(14, (width - PanelSnapBar.Width) / 2));
+        Canvas.SetTop(PanelSnapBar, 0);
+        var showPairPresets = StrongsPanelRoot.Visibility == Visibility.Visible && ScripturePanelRoot.Visibility == Visibility.Visible;
+        PanelPresetBothSplit.Visibility = showPairPresets ? Visibility.Visible : Visibility.Collapsed;
+        PanelPresetBothStack.Visibility = showPairPresets ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void PanelPreset_MouseEnter(object sender, MouseEventArgs e)
@@ -5873,7 +6772,16 @@ public partial class MainWindow : Window
         if (sender is Border { Tag: string tag } && Enum.TryParse<PanelPreset>(tag, out var preset))
         {
             _hoveredPanelPreset = preset;
+            _hoveredPanelPresetCommand = null;
             SetPanelPresetHighlight(preset);
+            ShowPanelPresetPreview(preset);
+        }
+        else if (sender is Border { Tag: string command })
+        {
+            _hoveredPanelPreset = null;
+            _hoveredPanelPresetCommand = command;
+            SetPanelPresetCommandHighlight(command);
+            ShowPanelPresetCommandPreview(command);
         }
     }
 
@@ -5881,20 +6789,28 @@ public partial class MainWindow : Window
     {
         if (_draggingPanelKind is not null)
         {
-            SetPanelPresetHighlight(_hoveredPanelPreset ?? GetNearestPanelPreset());
+            SetPanelPresetHighlight(_hoveredPanelPreset);
         }
     }
 
     private void PanelPreset_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (_draggingPanelKind is null
-            || sender is not Border { Tag: string tag }
-            || !Enum.TryParse<PanelPreset>(tag, out var preset))
+        if (_draggingPanelKind is null || sender is not Border { Tag: string tag })
         {
             return;
         }
 
-        _hoveredPanelPreset = preset;
+        if (Enum.TryParse<PanelPreset>(tag, out var preset))
+        {
+            _hoveredPanelPreset = preset;
+            _hoveredPanelPresetCommand = null;
+        }
+        else
+        {
+            _hoveredPanelPreset = null;
+            _hoveredPanelPresetCommand = tag;
+        }
+
         PanelDragHandle_MouseLeftButtonUp(_draggingPanelHandle!, e);
         e.Handled = true;
     }
@@ -5908,6 +6824,40 @@ public partial class MainWindow : Window
             target.Background = isSelected ? PanelPresetActiveBrush : PanelPresetIdleBrush;
             target.BorderBrush = isSelected ? PanelPresetActiveBorderBrush : PanelPresetIdleBorderBrush;
             target.Opacity = isSelected ? 1 : 0.84;
+        }
+
+        if (preset is not null)
+        {
+            _hoveredPanelPresetCommand = null;
+            ShowPanelPresetPreview(preset.Value);
+        }
+        else
+        {
+            HidePanelPresetPreviews();
+        }
+
+        foreach (var target in new[] { PanelPresetBothSplit, PanelPresetBothStack })
+        {
+            target.Background = PanelPresetIdleBrush;
+            target.BorderBrush = PanelPresetIdleBorderBrush;
+            target.Opacity = 0.84;
+        }
+    }
+
+    private void SetPanelPresetCommandHighlight(string? command)
+    {
+        SetPanelPresetHighlight(null);
+        foreach (var target in new[] { PanelPresetBothSplit, PanelPresetBothStack })
+        {
+            var isSelected = string.Equals(target.Tag as string, command, StringComparison.OrdinalIgnoreCase);
+            target.Background = isSelected ? PanelPresetActiveBrush : PanelPresetIdleBrush;
+            target.BorderBrush = isSelected ? PanelPresetActiveBorderBrush : PanelPresetIdleBorderBrush;
+            target.Opacity = isSelected ? 1 : 0.84;
+        }
+
+        if (command is not null)
+        {
+            ShowPanelPresetCommandPreview(command);
         }
     }
 
@@ -5944,14 +6894,278 @@ public partial class MainWindow : Window
         return PanelPreset.Float;
     }
 
+    private Point ClampPanelOffset(MovablePanelKind kind, Point candidateOffset)
+    {
+        var panel = GetPanelRoot(kind);
+        var transform = GetPanelTransform(kind);
+        if (panel.ActualWidth <= 0 || panel.ActualHeight <= 0 || StudyPanel.ActualWidth <= 0 || StudyPanel.ActualHeight <= 0)
+        {
+            return candidateOffset;
+        }
+
+        var bounds = GetPanelBounds(panel);
+        if (bounds == Rect.Empty)
+        {
+            return candidateOffset;
+        }
+
+        var layoutLeft = bounds.Left - transform.X;
+        var layoutTop = bounds.Top - transform.Y;
+        var minX = -layoutLeft;
+        var minY = -layoutTop;
+        var maxX = Math.Max(minX, StudyPanel.ActualWidth - layoutLeft - panel.ActualWidth);
+        var maxY = Math.Max(minY, StudyPanel.ActualHeight - layoutTop - panel.ActualHeight);
+        return new Point(
+            Math.Clamp(candidateOffset.X, minX, maxX),
+            Math.Clamp(candidateOffset.Y, minY, maxY));
+    }
+
+    private void UpdatePanelSnapBarForPointer(Point pointer)
+    {
+        const double openTrigger = 22;
+        if (pointer.Y <= openTrigger)
+        {
+            if (!_panelPresetTrayOpen)
+            {
+                _panelPresetTrayOpen = true;
+                PanelPresetTray.Visibility = Visibility.Visible;
+                AnimatePanelSnapBar(open: true);
+            }
+
+            UpdatePresetUnderTopBarPointer(pointer);
+            return;
+        }
+
+        if (_panelPresetTrayOpen)
+        {
+            var trayBounds = GetSnapBarBounds();
+            if (trayBounds.Contains(pointer))
+            {
+                UpdatePresetUnderTopBarPointer(pointer);
+                return;
+            }
+        }
+
+        if (_panelPresetTrayOpen)
+        {
+            _panelPresetTrayOpen = false;
+            PanelPresetTray.Visibility = Visibility.Collapsed;
+            _hoveredPanelPreset = null;
+            _hoveredPanelPresetCommand = null;
+            SetPanelPresetHighlight(null);
+            HidePanelPresetPreviews();
+            AnimatePanelSnapBar(open: false);
+        }
+    }
+
+    private void AnimatePanelSnapBar(bool open)
+    {
+        PanelSnapBarTransform.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(
+            PanelSnapBarTransform.Y,
+            open ? 0 : -58,
+            TimeSpan.FromMilliseconds(open ? 210 : 160))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        });
+    }
+
+    private Rect GetSnapBarBounds()
+    {
+        if (PanelSnapBar.ActualWidth <= 0 || PanelSnapBar.ActualHeight <= 0)
+        {
+            return Rect.Empty;
+        }
+
+        var topLeft = PanelSnapBar.TransformToAncestor(StudyPanel).Transform(new Point(0, 0));
+        var padding = _panelPresetTrayOpen ? 18 : 4;
+        return new Rect(
+            topLeft.X - padding,
+            topLeft.Y - padding,
+            PanelSnapBar.ActualWidth + padding * 2,
+            PanelSnapBar.ActualHeight + padding * 2);
+    }
+
+    private void UpdatePresetUnderTopBarPointer(Point pointer)
+    {
+        var presetElements = new[]
+        {
+            PanelPresetTop,
+            PanelPresetLeft,
+            PanelPresetRight,
+            PanelPresetBottom,
+            PanelPresetFloat,
+            PanelPresetBothSplit,
+            PanelPresetBothStack
+        };
+
+        foreach (var element in presetElements)
+        {
+            if (element.Visibility != Visibility.Visible || element.ActualWidth <= 0 || element.ActualHeight <= 0)
+            {
+                continue;
+            }
+
+            var topLeft = element.TransformToAncestor(StudyPanel).Transform(new Point(0, 0));
+            var bounds = new Rect(topLeft, new Size(element.ActualWidth, element.ActualHeight));
+            if (!bounds.Contains(pointer) || element.Tag is not string tag)
+            {
+                continue;
+            }
+
+            if (Enum.TryParse<PanelPreset>(tag, out var preset))
+            {
+                _hoveredPanelPreset = preset;
+                _hoveredPanelPresetCommand = null;
+                SetPanelPresetHighlight(preset);
+            }
+            else
+            {
+                _hoveredPanelPreset = null;
+                _hoveredPanelPresetCommand = tag;
+                SetPanelPresetCommandHighlight(tag);
+            }
+
+            return;
+        }
+
+        _hoveredPanelPreset = null;
+        _hoveredPanelPresetCommand = null;
+        SetPanelPresetHighlight(null);
+    }
+
+    private void ShowPanelPresetPreview(PanelPreset preset)
+    {
+        if (_draggingPanelKind is null)
+        {
+            HidePanelPresetPreviews();
+            return;
+        }
+
+        var bounds = GetPreviewBounds(_draggingPanelKind.Value, preset);
+        AnimatePanelPresetPreview(PanelPresetPreviewPrimary, bounds, 0.22);
+        AnimatePanelPresetPreview(PanelPresetPreviewSecondary, null, 0);
+    }
+
+    private void ShowPanelPresetCommandPreview(string command)
+    {
+        if (string.Equals(command, "PairSplit", StringComparison.OrdinalIgnoreCase)
+            && ScripturePanelRoot.Visibility == Visibility.Visible
+            && StrongsPanelRoot.Visibility == Visibility.Visible)
+        {
+            AnimatePanelPresetPreview(PanelPresetPreviewPrimary, GetPreviewBounds(MovablePanelKind.Scripture, PanelPreset.Left), 0.22);
+            AnimatePanelPresetPreview(PanelPresetPreviewSecondary, GetPreviewBounds(MovablePanelKind.Strongs, PanelPreset.Right), 0.20);
+            return;
+        }
+
+        if (string.Equals(command, "PairStack", StringComparison.OrdinalIgnoreCase)
+            && ScripturePanelRoot.Visibility == Visibility.Visible
+            && StrongsPanelRoot.Visibility == Visibility.Visible)
+        {
+            AnimatePanelPresetPreview(PanelPresetPreviewPrimary, GetPreviewBounds(MovablePanelKind.Scripture, PanelPreset.Top), 0.22);
+            AnimatePanelPresetPreview(PanelPresetPreviewSecondary, GetPreviewBounds(MovablePanelKind.Strongs, PanelPreset.Bottom), 0.20);
+            return;
+        }
+
+        HidePanelPresetPreviews();
+    }
+
+    private Rect GetPreviewBounds(MovablePanelKind kind, PanelPreset preset)
+    {
+        var studyWidth = Math.Max(1, StudyPanel.ActualWidth);
+        var studyHeight = Math.Max(1, StudyPanel.ActualHeight);
+        var panel = GetPanelRoot(kind);
+        var width = Math.Clamp(panel.ActualWidth > 0 ? panel.ActualWidth : kind == MovablePanelKind.Scripture ? 440 : 330,
+            1,
+            Math.Max(1, studyWidth - 28));
+        var height = panel.ActualHeight > 0 ? panel.ActualHeight : Math.Max(1, studyHeight * 0.58);
+
+        switch (preset)
+        {
+            case PanelPreset.Top:
+            case PanelPreset.Bottom:
+                height = Math.Max(1, studyHeight * 0.46);
+                break;
+            case PanelPreset.Left:
+            case PanelPreset.Right:
+                height = studyHeight;
+                break;
+            case PanelPreset.Float:
+                height = Math.Max(1, studyHeight * 0.58);
+                break;
+        }
+
+        var topLeft = GetPresetTopLeft(preset, new Rect(0, 0, width, height));
+        return new Rect(topLeft, new Size(width, Math.Min(height, studyHeight)));
+    }
+
+    private void AnimatePanelPresetPreview(Border preview, Rect? target, double opacity)
+    {
+        var duration = new Duration(TimeSpan.FromMilliseconds(170));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        if (target is not { } rect || rect.Width <= 0 || rect.Height <= 0)
+        {
+            preview.BeginAnimation(OpacityProperty, new DoubleAnimation(preview.Opacity, 0, duration)
+            {
+                EasingFunction = ease
+            });
+            return;
+        }
+
+        preview.Visibility = Visibility.Visible;
+        AnimateCanvasMetric(preview, Canvas.LeftProperty, rect.Left, duration, ease);
+        AnimateCanvasMetric(preview, Canvas.TopProperty, rect.Top, duration, ease);
+        preview.BeginAnimation(FrameworkElement.WidthProperty, new DoubleAnimation(preview.ActualWidth > 1 ? preview.ActualWidth : rect.Width, rect.Width, duration)
+        {
+            EasingFunction = ease
+        });
+        preview.BeginAnimation(FrameworkElement.HeightProperty, new DoubleAnimation(preview.ActualHeight > 1 ? preview.ActualHeight : rect.Height, rect.Height, duration)
+        {
+            EasingFunction = ease
+        });
+        preview.BeginAnimation(OpacityProperty, new DoubleAnimation(preview.Opacity, opacity, duration)
+        {
+            EasingFunction = ease
+        });
+    }
+
+    private static void AnimateCanvasMetric(UIElement target, DependencyProperty property, double to, Duration duration, IEasingFunction ease)
+    {
+        var current = (double)target.GetValue(property);
+        if (double.IsNaN(current))
+        {
+            current = to;
+        }
+
+        target.BeginAnimation(property, new DoubleAnimation(current, to, duration)
+        {
+            EasingFunction = ease
+        });
+    }
+
+    private void HidePanelPresetPreviews()
+    {
+        AnimatePanelPresetPreview(PanelPresetPreviewPrimary, null, 0);
+        AnimatePanelPresetPreview(PanelPresetPreviewSecondary, null, 0);
+    }
+
     private Border GetPanelRoot(MovablePanelKind kind)
     {
-        return kind == MovablePanelKind.Scripture ? ScripturePanelRoot : StrongsPanelRoot;
+        return kind switch
+        {
+            MovablePanelKind.Editor => StudyEditorPanelRoot,
+            MovablePanelKind.Scripture => ScripturePanelRoot,
+            _ => StrongsPanelRoot
+        };
     }
 
     private TranslateTransform GetPanelTransform(MovablePanelKind kind)
     {
-        return kind == MovablePanelKind.Scripture ? ScripturePanelDragTransform : StrongsPanelDragTransform;
+        return kind switch
+        {
+            MovablePanelKind.Editor => StudyEditorPanelDragTransform,
+            MovablePanelKind.Scripture => ScripturePanelDragTransform,
+            _ => StrongsPanelDragTransform
+        };
     }
 
     private Rect GetPanelBounds(Border panel)
@@ -5996,7 +7210,14 @@ public partial class MainWindow : Window
             {
                 EasingFunction = ease
             };
-            yAnimation.Completed += (_, _) => UpdateEditorAvoidanceForPanels(animate: false);
+            yAnimation.Completed += (_, _) =>
+            {
+                transform.BeginAnimation(TranslateTransform.XProperty, null);
+                transform.BeginAnimation(TranslateTransform.YProperty, null);
+                transform.X = targetX;
+                transform.Y = targetY;
+                UpdateEditorAvoidanceForPanels(animate: false);
+            };
             transform.BeginAnimation(TranslateTransform.YProperty, yAnimation);
         }
         else
@@ -6014,6 +7235,7 @@ public partial class MainWindow : Window
             _strongsPanelPreset = preset;
         }
 
+        Dispatcher.BeginInvoke(() => SaveCurrentPanelGeometry(kind, flush: true), DispatcherPriority.Render);
         Dispatcher.BeginInvoke(() => UpdateEditorAvoidanceForPanels(animate), DispatcherPriority.Render);
     }
 
@@ -6034,66 +7256,501 @@ public partial class MainWindow : Window
 
     private void ConfigurePanelLayoutForPreset(Border panel, PanelPreset preset)
     {
-        var height = Math.Max(260, StudyPanel.ActualHeight);
+        var height = Math.Max(1, StudyPanel.ActualHeight);
+        panel.VerticalAlignment = VerticalAlignment.Top;
         switch (preset)
         {
             case PanelPreset.Top:
             case PanelPreset.Bottom:
-                panel.Height = Math.Max(260, height * 0.46);
-                panel.VerticalAlignment = preset == PanelPreset.Top ? VerticalAlignment.Top : VerticalAlignment.Bottom;
+                panel.Height = Math.Max(1, height * 0.46);
                 break;
             case PanelPreset.Float:
-                panel.Height = Math.Max(260, height * 0.58);
-                panel.VerticalAlignment = VerticalAlignment.Top;
+                panel.Height = Math.Max(1, height * 0.58);
                 break;
             default:
-                panel.Height = double.NaN;
-                panel.VerticalAlignment = VerticalAlignment.Stretch;
+                panel.Height = height;
                 break;
+        }
+    }
+
+    private void ApplyPanelPairPreset(bool split)
+    {
+        if (StrongsPanelRoot.Visibility != Visibility.Visible || ScripturePanelRoot.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        if (split)
+        {
+            ApplyPanelPreset(MovablePanelKind.Scripture, PanelPreset.Left, animate: true);
+            ApplyPanelPreset(MovablePanelKind.Strongs, PanelPreset.Right, animate: true);
+            return;
+        }
+
+        ApplyPanelPreset(MovablePanelKind.Scripture, PanelPreset.Top, animate: true);
+        ApplyPanelPreset(MovablePanelKind.Strongs, PanelPreset.Bottom, animate: true);
+    }
+
+    private void ApplyStudyPanelGeometry(WorkspaceItem study)
+    {
+        if (!ReferenceEquals(_currentStudy, study) || StudyPanel.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        if (ShouldResetStudyPanelGeometry(study))
+        {
+            ApplyDefaultStudyPanelGeometry(study, save: true);
+            UpdateEditorAvoidanceForPanels(animate: false);
+            return;
+        }
+
+        ApplySavedPanelGeometry(MovablePanelKind.Editor, study.EditorPanelGeometry);
+
+        if (ScripturePanelRoot.Visibility == Visibility.Visible)
+        {
+            ApplySavedPanelGeometry(MovablePanelKind.Scripture, study.ScripturePanelGeometry);
+        }
+
+        if (StrongsPanelRoot.Visibility == Visibility.Visible)
+        {
+            ApplySavedPanelGeometry(MovablePanelKind.Strongs, study.StrongsPanelGeometry);
+        }
+        ClampAllPanelsToStudyArea(save: false);
+        UpdateEditorAvoidanceForPanels(animate: false);
+    }
+
+    private bool ShouldResetStudyPanelGeometry(WorkspaceItem study)
+    {
+        if (StudyPanel.ActualWidth <= 1 || StudyPanel.ActualHeight <= 1)
+        {
+            return false;
+        }
+
+        if (study.EditorPanelGeometry is null || study.ScripturePanelGeometry is null)
+        {
+            return true;
+        }
+
+        var editor = study.EditorPanelGeometry;
+        var scripture = study.ScripturePanelGeometry;
+        var width = StudyPanel.ActualWidth;
+        var height = StudyPanel.ActualHeight;
+        var editorLooksMaxed = LooksLikeLegacyMaxedPanel(editor, width, height);
+        var scriptureLooksMaxed = LooksLikeLegacyMaxedPanel(scripture, width, height);
+        var editorLooksTiny = LooksLikeTinyPanel(editor, width, height);
+        var scriptureLooksFullscreen = LooksLikeLegacyMaxedPanel(scripture, width, height);
+        var scriptureCoversEditorDefault = scripture.X <= 24 && scripture.Width >= width * 0.74;
+
+        return (editorLooksMaxed && scriptureLooksMaxed)
+            || (editorLooksTiny && scriptureLooksFullscreen)
+            || (editorLooksTiny && scriptureCoversEditorDefault);
+    }
+
+    private static bool LooksLikeLegacyMaxedPanel(PanelGeometryState geometry, double width, double height)
+    {
+        return geometry.X <= 24
+            && geometry.Y <= 24
+            && geometry.Width >= width * 0.82
+            && geometry.Height >= height * 0.82;
+    }
+
+    private static bool LooksLikeTinyPanel(PanelGeometryState geometry, double width, double height)
+    {
+        return geometry.Width <= width * 0.28
+            || geometry.Height <= height * 0.32;
+    }
+
+    private void ApplyDefaultStudyPanelGeometry(WorkspaceItem study, bool save)
+    {
+        var width = Math.Max(1, StudyPanel.ActualWidth);
+        var height = Math.Max(1, StudyPanel.ActualHeight);
+        var editorWidth = Math.Max(1, Math.Floor(width * 0.5));
+        var scriptureWidth = Math.Max(1, width - editorWidth);
+
+        study.EditorPanelGeometry = new PanelGeometryState
+        {
+            X = 0,
+            Y = 0,
+            Width = editorWidth,
+            Height = height
+        };
+        study.ScripturePanelGeometry = new PanelGeometryState
+        {
+            X = editorWidth,
+            Y = 0,
+            Width = scriptureWidth,
+            Height = height
+        };
+
+        ApplySavedPanelGeometry(MovablePanelKind.Editor, study.EditorPanelGeometry);
+        if (ScripturePanelRoot.Visibility == Visibility.Visible)
+        {
+            ApplySavedPanelGeometry(MovablePanelKind.Scripture, study.ScripturePanelGeometry);
+        }
+
+        if (StrongsPanelRoot.Visibility == Visibility.Visible)
+        {
+            ApplySavedPanelGeometry(MovablePanelKind.Strongs, study.StrongsPanelGeometry);
+        }
+
+        ClampAllPanelsToStudyArea(save: false);
+        if (save)
+        {
+            SaveWorkspaceState();
+        }
+    }
+
+    private void ApplySavedPanelGeometry(MovablePanelKind kind, PanelGeometryState? geometry)
+    {
+        var panel = GetPanelRoot(kind);
+        var transform = GetPanelTransform(kind);
+        transform.BeginAnimation(TranslateTransform.XProperty, null);
+        transform.BeginAnimation(TranslateTransform.YProperty, null);
+
+        if (geometry is null || geometry.Width <= 0 || geometry.Height <= 0)
+        {
+            panel.BeginAnimation(FrameworkElement.WidthProperty, null);
+            panel.BeginAnimation(FrameworkElement.HeightProperty, null);
+            var defaultWidth = kind switch
+            {
+                MovablePanelKind.Editor => Math.Max(1, StudyPanel.ActualWidth * 0.5),
+                MovablePanelKind.Scripture => Math.Max(1, StudyPanel.ActualWidth * 0.5),
+                _ => 330
+            };
+            var defaultHeight = kind == MovablePanelKind.Editor
+                ? Math.Max(1, StudyPanel.ActualHeight)
+                : kind == MovablePanelKind.Scripture
+                    ? Math.Max(1, StudyPanel.ActualHeight)
+                    : Math.Max(1, StudyPanel.ActualHeight * 0.72);
+            SetPanelSize(kind, defaultWidth, defaultHeight);
+            panel.VerticalAlignment = VerticalAlignment.Top;
+            var preset = kind == MovablePanelKind.Editor
+                ? PanelPreset.Left
+                : kind == MovablePanelKind.Scripture
+                    ? PanelPreset.Right
+                    : PanelPreset.Float;
+            var desired = GetPresetTopLeft(preset, new Rect(0, 0, panel.Width, panel.Height));
+            transform.X = desired.X;
+            transform.Y = desired.Y;
+            return;
+        }
+
+        SetPanelSize(kind, geometry.Width, geometry.Height);
+        panel.VerticalAlignment = VerticalAlignment.Top;
+        StudyPanel.UpdateLayout();
+        var currentBounds = GetPanelBounds(panel);
+        if (currentBounds == Rect.Empty)
+        {
+            return;
+        }
+
+        var transformOffset = new Point(
+            transform.X + geometry.X - currentBounds.Left,
+            transform.Y + geometry.Y - currentBounds.Top);
+        var clampedOffset = ClampPanelOffset(kind, transformOffset);
+        transform.X = clampedOffset.X;
+        transform.Y = clampedOffset.Y;
+    }
+
+    private void SaveCurrentPanelGeometry(MovablePanelKind kind, bool flush = false)
+    {
+        var panel = GetPanelRoot(kind);
+        var bounds = GetPanelBounds(panel);
+        if (bounds == Rect.Empty)
+        {
+            return;
+        }
+
+        SavePanelGeometry(kind, bounds.Left, bounds.Top, bounds.Width, bounds.Height, flush);
+    }
+
+    private void SavePanelGeometry(MovablePanelKind kind, double x, double y, double width, double height, bool flush = false)
+    {
+        if (_currentStudy is null || width <= 0 || height <= 0)
+        {
+            return;
+        }
+
+        var geometry = new PanelGeometryState
+        {
+            X = Math.Round(x, 2),
+            Y = Math.Round(y, 2),
+            Width = Math.Round(width, 2),
+            Height = Math.Round(height, 2)
+        };
+
+        if (kind == MovablePanelKind.Scripture)
+        {
+            _currentStudy.ScripturePanelGeometry = geometry;
+        }
+        else if (kind == MovablePanelKind.Editor)
+        {
+            _currentStudy.EditorPanelGeometry = geometry;
+        }
+        else
+        {
+            _currentStudy.StrongsPanelGeometry = geometry;
+        }
+
+        if (flush)
+        {
+            SaveWorkspaceState();
+        }
+        else
+        {
+            QueueWorkspaceSave();
+        }
+    }
+
+    private void SetPanelSize(MovablePanelKind kind, double width, double height, bool updateColumns = false)
+    {
+        var panel = GetPanelRoot(kind);
+        var maxWidth = Math.Max(1, StudyPanel.ActualWidth);
+        var maxHeight = Math.Max(1, StudyPanel.ActualHeight);
+        var safeWidth = Math.Round(Math.Clamp(width, 1, maxWidth));
+        var safeHeight = Math.Round(Math.Clamp(height, 1, maxHeight));
+
+        panel.BeginAnimation(FrameworkElement.WidthProperty, null);
+        panel.BeginAnimation(FrameworkElement.HeightProperty, null);
+        panel.Width = safeWidth;
+        panel.Height = safeHeight;
+        panel.VerticalAlignment = VerticalAlignment.Top;
+
+        if (!updateColumns)
+        {
+            return;
+        }
+
+        if (kind == MovablePanelKind.Scripture)
+        {
+            ScriptureColumn.Width = new GridLength(safeWidth);
+            _scripturePanelVisibleWidth = new GridLength(safeWidth);
+        }
+        else
+        {
+            StrongsColumn.Width = new GridLength(safeWidth);
+            _strongsPanelVisibleWidth = new GridLength(safeWidth);
+        }
+    }
+
+    private void PanelResizeThumb_DragStarted(object sender, DragStartedEventArgs e)
+    {
+        if (sender is not Thumb thumb
+            || FindAncestor<Border>(thumb) is not { } panel
+            || StudyPanel.ActualWidth <= 0
+            || StudyPanel.ActualHeight <= 0)
+        {
+            return;
+        }
+
+        var kind = GetPanelKindFromRoot(panel);
+        if (kind is null)
+        {
+            return;
+        }
+
+        BringPanelToFront(kind.Value);
+        var transform = GetPanelTransform(kind.Value);
+        CommitTranslateTransformPosition(transform);
+
+        var bounds = GetPanelBounds(panel);
+        if (bounds == Rect.Empty)
+        {
+            return;
+        }
+
+        _resizingPanelKind = kind;
+        _panelResizeStartBounds = bounds;
+        _panelResizeStartPointer = Mouse.GetPosition(StudyPanel);
+        _panelResizePendingBounds = bounds;
+        _panelResizeOriginalCacheMode = panel.CacheMode;
+        panel.CacheMode = null;
+        _panelResizeAccumulatedDelta = new Vector();
+    }
+
+    private void PanelResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        if (sender is not Thumb { Tag: string tag } thumb
+            || FindAncestor<Border>(thumb) is not { } panel
+            || StudyPanel.ActualWidth <= 0
+            || StudyPanel.ActualHeight <= 0)
+        {
+            return;
+        }
+
+        var kind = GetPanelKindFromRoot(panel);
+        if (kind is null)
+        {
+            return;
+        }
+
+        if (_resizingPanelKind != kind || _panelResizeStartBounds == Rect.Empty)
+        {
+            PanelResizeThumb_DragStarted(sender, new DragStartedEventArgs(0, 0));
+        }
+
+        var resizeLeft = tag.Contains("Left", StringComparison.OrdinalIgnoreCase);
+        var resizeRight = tag.Contains("Right", StringComparison.OrdinalIgnoreCase);
+        var resizeTop = tag.Contains("Top", StringComparison.OrdinalIgnoreCase);
+        var resizeBottom = tag.Contains("Bottom", StringComparison.OrdinalIgnoreCase);
+        const double minWidth = 1;
+        const double minHeight = 1;
+
+        var pointer = Mouse.GetPosition(StudyPanel);
+        _panelResizeAccumulatedDelta = pointer - _panelResizeStartPointer;
+        var left = _panelResizeStartBounds.Left;
+        var right = _panelResizeStartBounds.Right;
+        var top = _panelResizeStartBounds.Top;
+        var bottom = _panelResizeStartBounds.Bottom;
+
+        if (resizeLeft)
+        {
+            left = Math.Clamp(left + _panelResizeAccumulatedDelta.X, 0, right - minWidth);
+        }
+
+        if (resizeRight)
+        {
+            right = Math.Clamp(right + _panelResizeAccumulatedDelta.X, left + minWidth, StudyPanel.ActualWidth);
+        }
+
+        if (resizeTop)
+        {
+            top = Math.Clamp(top + _panelResizeAccumulatedDelta.Y, 0, bottom - minHeight);
+        }
+
+        if (resizeBottom)
+        {
+            bottom = Math.Clamp(bottom + _panelResizeAccumulatedDelta.Y, top + minHeight, StudyPanel.ActualHeight);
+        }
+
+        left = Math.Round(left);
+        top = Math.Round(top);
+        right = Math.Round(Math.Max(left + minWidth, right));
+        bottom = Math.Round(Math.Max(top + minHeight, bottom));
+
+        _resizingPanelKind = kind;
+        _panelResizePendingBounds = new Rect(new Point(left, top), new Point(right, bottom));
+        if (!_panelResizeRenderSubscribed)
+        {
+            _panelResizeRenderSubscribed = true;
+            CompositionTarget.Rendering += PanelResize_Rendering;
+        }
+    }
+
+    private void PanelResize_Rendering(object? sender, EventArgs e)
+    {
+        if (_resizingPanelKind is null)
+        {
+            StopPanelResizeRendering();
+            return;
+        }
+
+        ApplyPendingPanelResize(updateAvoidance: false);
+    }
+
+    private void ApplyPendingPanelResize(bool updateAvoidance)
+    {
+        if (_resizingPanelKind is null || _panelResizePendingBounds == Rect.Empty)
+        {
+            return;
+        }
+
+        var kind = _resizingPanelKind.Value;
+        var panel = GetPanelRoot(kind);
+        var bounds = GetPanelBounds(panel);
+        if (bounds == Rect.Empty)
+        {
+            return;
+        }
+
+        var transform = GetPanelTransform(kind);
+        SetPanelSize(kind, _panelResizePendingBounds.Width, _panelResizePendingBounds.Height);
+        transform.X += _panelResizePendingBounds.Left - bounds.Left;
+        transform.Y += _panelResizePendingBounds.Top - bounds.Top;
+        var clampedOffset = ClampPanelOffset(kind, new Point(transform.X, transform.Y));
+        transform.X = Math.Round(clampedOffset.X);
+        transform.Y = Math.Round(clampedOffset.Y);
+
+        _ = updateAvoidance;
+    }
+
+    private void StopPanelResizeRendering()
+    {
+        if (_panelResizeRenderSubscribed)
+        {
+            CompositionTarget.Rendering -= PanelResize_Rendering;
+            _panelResizeRenderSubscribed = false;
+        }
+    }
+
+    private void PanelResizeThumb_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        if (sender is not Thumb thumb || FindAncestor<Border>(thumb) is not { } panel)
+        {
+            return;
+        }
+
+        var kind = GetPanelKindFromRoot(panel);
+        if (kind is null)
+        {
+            return;
+        }
+
+        ApplyPendingPanelResize(updateAvoidance: false);
+        StopPanelResizeRendering();
+        panel.CacheMode = _panelResizeOriginalCacheMode;
+        _panelResizeOriginalCacheMode = null;
+        _resizingPanelKind = null;
+        _panelResizeStartBounds = Rect.Empty;
+        _panelResizeStartPointer = new Point();
+        _panelResizePendingBounds = Rect.Empty;
+        _panelResizeAccumulatedDelta = new Vector();
+        BringPanelToFront(kind.Value);
+        SaveCurrentPanelGeometry(kind.Value, flush: true);
+    }
+
+    private MovablePanelKind? GetPanelKindFromRoot(Border panel)
+    {
+        return ReferenceEquals(panel, StudyEditorPanelRoot)
+            ? MovablePanelKind.Editor
+            : ReferenceEquals(panel, ScripturePanelRoot)
+                ? MovablePanelKind.Scripture
+                : ReferenceEquals(panel, StrongsPanelRoot)
+                    ? MovablePanelKind.Strongs
+                    : (MovablePanelKind?)null;
+    }
+
+    private void ClampAllPanelsToStudyArea(bool save)
+    {
+        foreach (var kind in new[] { MovablePanelKind.Editor, MovablePanelKind.Scripture, MovablePanelKind.Strongs })
+        {
+            var panel = GetPanelRoot(kind);
+            if (panel.Visibility != Visibility.Visible)
+            {
+                continue;
+            }
+
+            var transform = GetPanelTransform(kind);
+            var clampedOffset = ClampPanelOffset(kind, new Point(transform.X, transform.Y));
+            transform.X = clampedOffset.X;
+            transform.Y = clampedOffset.Y;
+            if (save)
+            {
+                SaveCurrentPanelGeometry(kind);
+            }
         }
     }
 
     private void UpdateEditorAvoidanceForPanels(bool animate)
     {
-        if (StudyEditorScrollViewer is null || StudyPanel.ActualWidth <= 0)
+        if (StudyEditorScrollViewer is null)
         {
             return;
         }
 
-        var editorWidth = Math.Max(0, StudyEditorColumn.ActualWidth);
-        var leftAvoidance = 0d;
-        var rightAvoidance = 0d;
-        foreach (var panel in new[] { ScripturePanelRoot, StrongsPanelRoot })
-        {
-            if (panel.Visibility != Visibility.Visible || panel.ActualWidth <= 0)
-            {
-                continue;
-            }
-
-            var bounds = GetPanelBounds(panel);
-            if (bounds == Rect.Empty || bounds.Bottom < 0 || bounds.Top > StudyPanel.ActualHeight)
-            {
-                continue;
-            }
-
-            var overlapLeft = Math.Max(0, Math.Min(editorWidth, bounds.Right) - Math.Max(0, bounds.Left));
-            if (overlapLeft <= 1)
-            {
-                continue;
-            }
-
-            if (bounds.Left + (bounds.Width / 2) < editorWidth / 2)
-            {
-                leftAvoidance = Math.Max(leftAvoidance, Math.Min(editorWidth - 120, bounds.Right + 10));
-            }
-            else
-            {
-                rightAvoidance = Math.Max(rightAvoidance, Math.Min(editorWidth - 120, editorWidth - bounds.Left + 10));
-            }
-        }
-
-        var targetMargin = new Thickness(4 + leftAvoidance, 0, 24 + rightAvoidance, 0);
-        var targetCaretMargin = new Thickness(4 + leftAvoidance, 0, 24 + rightAvoidance, 0);
+        var targetMargin = new Thickness(4, 0, 24, 0);
+        var targetCaretMargin = new Thickness(4, 0, 24, 0);
         if (!animate)
         {
             StudyEditorScrollViewer.Margin = targetMargin;
@@ -6118,9 +7775,29 @@ public partial class MainWindow : Window
     private void StudyPanel_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         PositionPanelPresetTargets();
+        ClampAllPanelsToStudyArea(save: !_isInitializing);
+        ClampExtraPanelsToStudyArea(save: !_isInitializing);
         if (_draggingPanelKind is null)
         {
             UpdateEditorAvoidanceForPanels(animate: false);
+        }
+    }
+
+    private void ClampExtraPanelsToStudyArea(bool save)
+    {
+        foreach (var runtime in _extraPanelRuntimes.Values)
+        {
+            var geometry = ClampExtraPanelGeometry(runtime.State.Geometry);
+            runtime.State.Geometry = geometry;
+            runtime.Root.Width = geometry.Width;
+            runtime.Root.Height = geometry.Height;
+            runtime.Transform.X = geometry.X;
+            runtime.Transform.Y = geometry.Y;
+        }
+
+        if (save && _extraPanelRuntimes.Count > 0)
+        {
+            QueueWorkspaceSave();
         }
     }
 
@@ -6135,6 +7812,7 @@ public partial class MainWindow : Window
         if (StrongsColumn.ActualWidth > 0)
         {
             _strongsPanelVisibleWidth = new GridLength(StrongsColumn.ActualWidth);
+            SaveCurrentPanelGeometry(MovablePanelKind.Strongs);
         }
 
         if (!animate)
@@ -6160,9 +7838,9 @@ public partial class MainWindow : Window
 
         if (show)
         {
-            StrongsSplitterColumn.Width = new GridLength(8);
-            StrongsColumnSplitter.Visibility = Visibility.Visible;
-            StrongsColumn.MinWidth = 220;
+            StrongsSplitterColumn.Width = new GridLength(0);
+            StrongsColumnSplitter.Visibility = Visibility.Collapsed;
+            StrongsColumn.MinWidth = 0;
         }
 
         StrongsColumn.BeginAnimation(ColumnDefinition.WidthProperty, null);
@@ -6267,9 +7945,9 @@ public partial class MainWindow : Window
             }
             else
             {
-                ScriptureColumn.MinWidth = 280;
-                ScriptureColumnSplitter.Width = 10;
-                ScriptureColumnSplitter.Visibility = Visibility.Visible;
+                ScriptureColumn.MinWidth = 0;
+                ScriptureColumnSplitter.Width = 0;
+                ScriptureColumnSplitter.Visibility = Visibility.Collapsed;
                 ScripturePanelRoot.Visibility = Visibility.Visible;
                 ScripturePanelRoot.Opacity = 0;
                 ScripturePanelScale.ScaleX = 0.04;
@@ -6302,8 +7980,8 @@ public partial class MainWindow : Window
 
         ScriptureColumn.BeginAnimation(ColumnDefinition.WidthProperty, widthAnimation);
         ScriptureColumnSplitter.BeginAnimation(FrameworkElement.WidthProperty, new DoubleAnimation(
-            hiding ? 10 : 0,
-            hiding ? 0 : 10,
+            0,
+            0,
             duration)
         {
             EasingFunction = ease
@@ -6315,6 +7993,7 @@ public partial class MainWindow : Window
         if (!_scripturePanelHidden && ScriptureColumn.ActualWidth > 0)
         {
             _scripturePanelVisibleWidth = new GridLength(ScriptureColumn.ActualWidth);
+            SaveCurrentPanelGeometry(MovablePanelKind.Scripture);
         }
     }
 
@@ -6489,6 +8168,14 @@ public sealed class WorkspaceItem : INotifyPropertyChanged
     public ObservableCollection<WorkspaceItem> Children { get; } = new();
 
     public ObservableCollection<StudyBlock> Blocks { get; } = new();
+
+    public PanelGeometryState? EditorPanelGeometry { get; set; }
+
+    public PanelGeometryState? ScripturePanelGeometry { get; set; }
+
+    public PanelGeometryState? StrongsPanelGeometry { get; set; }
+
+    public ObservableCollection<ExtraStudyPanelState> ExtraPanels { get; } = new();
 
     public int? PassageStartChapter
     {
@@ -7095,6 +8782,14 @@ public sealed class WorkspaceItemState
 
     public DateTime? LastEditedAt { get; set; }
 
+    public PanelGeometryState? EditorPanelGeometry { get; set; }
+
+    public PanelGeometryState? ScripturePanelGeometry { get; set; }
+
+    public PanelGeometryState? StrongsPanelGeometry { get; set; }
+
+    public List<ExtraStudyPanelState> ExtraPanels { get; set; } = new();
+
     public List<WorkspaceItemState> Children { get; set; } = new();
 
     public List<StudyBlockState> Blocks { get; set; } = new();
@@ -7108,6 +8803,47 @@ public sealed class StudyBlockState
 
     public bool IsChecked { get; set; }
 }
+
+public sealed class PanelGeometryState
+{
+    public double X { get; set; }
+
+    public double Y { get; set; }
+
+    public double Width { get; set; }
+
+    public double Height { get; set; }
+}
+
+public enum ExtraStudyPanelKind
+{
+    Scripture,
+    Notes
+}
+
+public sealed class ExtraStudyPanelState
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+
+    public ExtraStudyPanelKind Kind { get; set; }
+
+    public string Title { get; set; } = string.Empty;
+
+    public PanelGeometryState Geometry { get; set; } = new();
+
+    public string? BookName { get; set; }
+
+    public int? Chapter { get; set; }
+
+    public int? SelectedVerse { get; set; }
+
+    public string NotesText { get; set; } = string.Empty;
+}
+
+public sealed record ExtraPanelRuntime(
+    ExtraStudyPanelState State,
+    Border Root,
+    TranslateTransform Transform);
 
 public sealed class DailyNoteState
 {
