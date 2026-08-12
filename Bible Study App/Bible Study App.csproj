@@ -12,6 +12,9 @@
   <ItemGroup>
     <None Include="..\asv.json" Link="Data\asv.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\nasb1995.json" Link="Data\nasb1995.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\nasb1995.json')" />
+    <None Include="Data\tagnt-mat-jhn.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Data\tagnt-act-rev.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Data\tbesg.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
