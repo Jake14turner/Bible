@@ -26,6 +26,8 @@
         <SolidColorBrush x:Key="Gold" Color="#DDA15E" />
         <SolidColorBrush x:Key="Sky" Color="#FEFAE0" />
         <SolidColorBrush x:Key="Violet" Color="#A98467" />
+        <Geometry x:Key="ChevronLeftIcon">M 10,2 L 4,8 L 10,14</Geometry>
+        <Geometry x:Key="ChevronRightIcon">M 4,2 L 10,8 L 4,14</Geometry>
 
         <Style x:Key="PanelResizeThumbStyle" TargetType="Thumb">
             <Setter Property="Background" Value="Transparent" />
@@ -347,6 +349,40 @@
             <Setter Property="Padding" Value="12,0" />
         </Style>
 
+        <Style x:Key="PanelToolbarButtonStyle" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="Background" Value="{DynamicResource AppBackground}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="10"
+                                Padding="{TemplateBinding Padding}" ClipToBounds="True">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource PanelBackground}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.78" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.38" />
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="StrongsToggleStyle" TargetType="ToggleButton">
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="MinWidth" Value="46" />
@@ -357,10 +393,9 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
                         <Border x:Name="Root"
-                                Background="{DynamicResource TextSecondary}"
-                                BorderBrush="#111111"
-                                BorderThickness="1"
-                                CornerRadius="8"
+                                Background="{DynamicResource AppBackground}"
+                                BorderThickness="0"
+                                CornerRadius="10"
                                 Padding="0">
                             <TextBlock Text="S"
                                        Foreground="{TemplateBinding Foreground}"
@@ -371,15 +406,69 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Mint}" />
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource PanelBackground}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="Root" Property="Background" Value="{DynamicResource Mint}" />
                                 <Setter Property="Foreground" Value="{DynamicResource AppBackground}" />
                             </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.78" />
+                            </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Root" Property="Opacity" Value="0.42" />
                                 <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SelectionActionButtonStyle" TargetType="Button" BasedOn="{StaticResource PanelToolbarButtonStyle}">
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="ToolTipService.InitialShowDelay" Value="120" />
+            <Setter Property="ToolTipService.ShowDuration" Value="5000" />
+            <Setter Property="ToolTipService.BetweenShowDelay" Value="40" />
+            <EventSetter Event="MouseLeave" Handler="SelectionActionButton_MouseLeave" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="19"
+                                Padding="{TemplateBinding Padding}" ClipToBounds="True">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Mint}" />
+                                <Setter TargetName="Root" Property="CornerRadius" Value="27" />
+                                <Setter Property="Foreground" Value="{DynamicResource AppBackground}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.78" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HighlightSwatchStyle" TargetType="Button">
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Margin" Value="3" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Swatch" Background="{TemplateBinding Background}" CornerRadius="15" />
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Swatch" Property="BorderBrush" Value="{DynamicResource TextPrimary}" />
+                                <Setter TargetName="Swatch" Property="BorderThickness" Value="2" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -915,9 +1004,14 @@
                             ToolTip="Back"
                             Visibility="Collapsed"
                             Margin="0,1,14,0">
-                        <TextBlock Text="&lt;"
-                                   FontSize="18"
-                                   FontWeight="Bold" />
+                        <Viewbox Width="16" Height="16">
+                            <Path Data="{StaticResource ChevronLeftIcon}"
+                                  Stroke="{DynamicResource TextPrimary}"
+                                  StrokeThickness="2"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round" />
+                        </Viewbox>
                     </Button>
                     <StackPanel Grid.Column="1">
                         <TextBlock x:Name="MainHeading"
@@ -1526,12 +1620,14 @@
                                                    FontSize="18"
                                                    FontWeight="Black"
                                                    VerticalAlignment="Center" />
-                                        <TextBlock Grid.Column="2"
-                                                   Text=">"
-                                                   Foreground="{DynamicResource TextSecondary}"
-                                                   FontSize="24"
-                                                   FontWeight="Black"
-                                                   VerticalAlignment="Center" />
+                                        <Viewbox Grid.Column="2" Width="18" Height="18" VerticalAlignment="Center">
+                                            <Path Data="{StaticResource ChevronRightIcon}"
+                                                  Stroke="{DynamicResource TextSecondary}"
+                                                  StrokeThickness="2"
+                                                  StrokeStartLineCap="Round"
+                                                  StrokeEndLineCap="Round"
+                                                  StrokeLineJoin="Round" />
+                                        </Viewbox>
                                     </Grid>
                                 </Button>
 
@@ -1602,15 +1698,88 @@
                                                    FontSize="18"
                                                    FontWeight="Black"
                                                    VerticalAlignment="Center" />
-                                        <TextBlock Grid.Column="2"
-                                                   Text=">"
-                                                   Foreground="{DynamicResource TextSecondary}"
-                                                   FontSize="24"
-                                                   FontWeight="Black"
-                                                   VerticalAlignment="Center" />
+                                        <Viewbox Grid.Column="2" Width="18" Height="18" VerticalAlignment="Center">
+                                            <Path Data="{StaticResource ChevronRightIcon}"
+                                                  Stroke="{DynamicResource TextSecondary}"
+                                                  StrokeThickness="2"
+                                                  StrokeStartLineCap="Round"
+                                                  StrokeEndLineCap="Round"
+                                                  StrokeLineJoin="Round" />
+                                        </Viewbox>
                                     </Grid>
                                 </Button>
 
+                                <Button Background="{DynamicResource PanelBackground}"
+                                        BorderBrush="{DynamicResource Mint}"
+                                        BorderThickness="1"
+                                        Padding="16"
+                                        Margin="0,12,0,0"
+                                        Cursor="Hand"
+                                        HorizontalContentAlignment="Stretch"
+                                        Click="LocalAiSettings_Click">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="Root" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" />
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Root" Property="Opacity" Value="0.9" /></Trigger>
+                                                <Trigger Property="IsPressed" Value="True"><Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource TextPrimary}" /></Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Width="42" Height="42" Margin="0,0,14,0" Background="#C9D7F8" CornerRadius="8">
+                                            <TextBlock Text="AI" Foreground="#283618" FontSize="15" FontWeight="Black" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="Local AI Model" Foreground="{DynamicResource TextPrimary}" FontSize="18" FontWeight="Black" />
+                                            <TextBlock Text="Choose and manage the Ollama model used on this computer." Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" Margin="0,5,16,0" />
+                                        </StackPanel>
+                                        <Viewbox Grid.Column="2" Width="18" Height="18" VerticalAlignment="Center">
+                                            <Path Data="{StaticResource ChevronRightIcon}" Stroke="{DynamicResource TextSecondary}" StrokeThickness="2"
+                                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                                        </Viewbox>
+                                    </Grid>
+                                </Button>
+
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Grid x:Name="LocalAiSettingsPanel" Visibility="Collapsed">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel MaxWidth="760" HorizontalAlignment="Left">
+                                <TextBlock Text="Select a downloaded Ollama model for AI-generated study overviews and reminders."
+                                           Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" Margin="0,0,0,22" />
+                                <Border Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource Mint}"
+                                        BorderThickness="1" CornerRadius="8" Padding="16">
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="Downloaded model" Foreground="{DynamicResource TextPrimary}" FontSize="18" FontWeight="Black" />
+                                                <TextBlock Text="The backend starts Ollama automatically and lists models already downloaded on this computer."
+                                                           Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" Margin="0,5,16,0" />
+                                            </StackPanel>
+                                            <Button x:Name="RefreshAiModelsButton" Grid.Column="1" Style="{StaticResource ChromeButtonStyle}"
+                                                    Padding="12,8" VerticalAlignment="Top" Click="RefreshAiModels_Click" Content="Refresh" />
+                                        </Grid>
+                                        <ComboBox x:Name="AiModelComboBox" Margin="0,14,0,0" MinHeight="38"
+                                                  SelectionChanged="AiModelComboBox_SelectionChanged" />
+                                        <TextBlock x:Name="AiModelStatusText" Text="Checking Ollama status..." Foreground="{DynamicResource TextSecondary}"
+                                                   FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,9,0,0" />
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>
@@ -1966,9 +2135,14 @@
                                     Background="{DynamicResource PanelBackground}"
                                     Click="BackOneLevel_Click"
                                     ToolTip="Back">
-                                <TextBlock Text="&lt;"
-                                           FontSize="18"
-                                           FontWeight="Bold" />
+                                <Viewbox Width="16" Height="16">
+                                    <Path Data="{StaticResource ChevronLeftIcon}"
+                                          Stroke="{DynamicResource TextPrimary}"
+                                          StrokeThickness="2"
+                                          StrokeStartLineCap="Round"
+                                          StrokeEndLineCap="Round"
+                                          StrokeLineJoin="Round" />
+                                </Viewbox>
                             </Button>
                             <StackPanel Grid.Column="1"
                                         Margin="14,0,0,0"
@@ -2160,35 +2334,6 @@
                                 Panel.ZIndex="9200"
                                 ClipToBounds="True" />
 
-                        <Button x:Name="AddFloatingPanelButton"
-                                Grid.Column="0"
-                                Grid.ColumnSpan="5"
-                                Grid.Row="0"
-                                Panel.ZIndex="9500"
-                                Style="{StaticResource IconButtonStyle}"
-                                Background="{DynamicResource TextSecondary}"
-                                Foreground="{DynamicResource TextPrimary}"
-                                Width="42"
-                                Height="38"
-                                Padding="0"
-                                HorizontalAlignment="Right"
-                                VerticalAlignment="Top"
-                                Margin="0,8,18,0"
-                                Click="AddFloatingPanelButton_Click"
-                                ToolTip="Add panel">
-                            <TextBlock Text="+"
-                                       FontSize="20"
-                                       FontWeight="Black" />
-                            <Button.ContextMenu>
-                                <ContextMenu x:Name="AddFloatingPanelMenu">
-                                    <MenuItem Header="Scripture panel"
-                                              Click="AddScripturePanelMenuItem_Click" />
-                                    <MenuItem Header="Notes panel"
-                                              Click="AddNotesPanelMenuItem_Click" />
-                                </ContextMenu>
-                            </Button.ContextMenu>
-                        </Button>
-
                         <Border x:Name="StudyEditorPanelRoot"
                                 Grid.Column="0"
                                 Grid.ColumnSpan="5"
@@ -2229,8 +2374,8 @@
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
+                                    <AdornerDecorator Grid.Row="1">
                                     <ScrollViewer x:Name="StudyEditorScrollViewer"
-                                                  Grid.Row="1"
                                                   Margin="0"
                                                   VerticalScrollBarVisibility="Auto"
                                                   HorizontalScrollBarVisibility="Disabled"
@@ -2286,8 +2431,11 @@
                                                                      MinHeight="{Binding TextMinHeight}"
                                                                      SpellCheck.IsEnabled="True"
                                                                      UndoLimit="80"
+                                                                     Loaded="SelectableText_Loaded"
                                                                      TextChanged="StudyBlock_TextChanged"
                                                                      SelectionChanged="StudyBlock_SelectionChanged"
+                                                                     PreviewMouseLeftButtonUp="SelectableText_PreviewMouseLeftButtonUp"
+                                                                     PreviewMouseMove="SelectableText_PreviewMouseMove"
                                                                      PreviewKeyDown="StudyBlock_PreviewKeyDown"
                                                                      KeyUp="StudyBlock_KeyUp"
                                                                      GotKeyboardFocus="StudyBlock_GotKeyboardFocus"
@@ -2304,6 +2452,7 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
                                     </ScrollViewer>
+                                    </AdornerDecorator>
                                     <Canvas x:Name="StudyEditorCaretLayer"
                                             Grid.Row="1"
                                             Panel.ZIndex="25"
@@ -2470,9 +2619,7 @@
                                 Grid.Column="0"
                                 Grid.Row="0"
                                 Panel.ZIndex="20"
-                                Style="{StaticResource ChromeButtonStyle}"
-                                Background="{DynamicResource Mint}"
-                                Foreground="{DynamicResource AppBackground}"
+                                Style="{StaticResource PanelToolbarButtonStyle}"
                                 Padding="12,8"
                                 MinWidth="72"
                                 Height="38"
@@ -2559,9 +2706,7 @@
                                     </Grid.ColumnDefinitions>
                                     <Button x:Name="ScripturePreviousChapterButton"
                                             Grid.Column="0"
-                                            Style="{StaticResource IconButtonStyle}"
-                                            Background="{DynamicResource TextSecondary}"
-                                            Foreground="{DynamicResource TextPrimary}"
+                                            Style="{StaticResource PanelToolbarButtonStyle}"
                                             MinWidth="42"
                                             Width="42"
                                             Height="38"
@@ -2569,9 +2714,12 @@
                                             Margin="0,0,10,0"
                                             Click="ScripturePreviousChapter_Click"
                                             ToolTip="Previous chapter">
-                                        <TextBlock Text="‹"
-                                                   FontSize="22"
-                                                   FontWeight="Black" />
+                                        <Viewbox Width="15" Height="15">
+                                            <Path Data="{StaticResource ChevronLeftIcon}"
+                                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  StrokeThickness="2" StrokeStartLineCap="Round"
+                                                  StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                                        </Viewbox>
                                     </Button>
                                     <StackPanel Grid.Column="1"
                                                 MaxHeight="82"
@@ -2620,9 +2768,7 @@
                                     </StackPanel>
                                     <Button x:Name="ScriptureNextChapterButton"
                                             Grid.Column="2"
-                                            Style="{StaticResource IconButtonStyle}"
-                                            Background="{DynamicResource TextSecondary}"
-                                            Foreground="{DynamicResource TextPrimary}"
+                                            Style="{StaticResource PanelToolbarButtonStyle}"
                                             MinWidth="42"
                                             Width="42"
                                             Height="38"
@@ -2630,15 +2776,16 @@
                                             Margin="10,0,0,0"
                                             Click="ScriptureNextChapter_Click"
                                             ToolTip="Next chapter">
-                                        <TextBlock Text="›"
-                                                   FontSize="22"
-                                                   FontWeight="Black" />
+                                        <Viewbox Width="15" Height="15">
+                                            <Path Data="{StaticResource ChevronRightIcon}"
+                                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  StrokeThickness="2" StrokeStartLineCap="Round"
+                                                  StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                                        </Viewbox>
                                     </Button>
                                     <Button x:Name="ScripturePanelToggleButton"
                                             Grid.Column="4"
-                                            Style="{StaticResource IconButtonStyle}"
-                                            Background="{DynamicResource TextSecondary}"
-                                            Foreground="{DynamicResource TextPrimary}"
+                                            Style="{StaticResource PanelToolbarButtonStyle}"
                                             Click="ScripturePanelToggle_Click"
                                             MinWidth="42"
                                             Width="42"
@@ -2720,6 +2867,13 @@
                                                      FocusVisualStyle="{x:Null}"
                                                      Padding="0"
                                                      FontSize="{Binding Value, ElementName=ScriptureFontSizeSlider}">
+                                            <RichTextBox.Style>
+                                                <Style TargetType="RichTextBox">
+                                                    <EventSetter Event="PreviewMouseLeftButtonUp" Handler="SelectableText_PreviewMouseLeftButtonUp" />
+                                                    <EventSetter Event="PreviewMouseMove" Handler="SelectableText_PreviewMouseMove" />
+                                                    <EventSetter Event="SelectionChanged" Handler="SelectableText_SelectionChanged" />
+                                                </Style>
+                                            </RichTextBox.Style>
                                             <FlowDocument x:Name="ScriptureDocument"
                                                           PagePadding="0"
                                                           FontFamily="Segoe UI"
@@ -2962,9 +3116,7 @@
                                                    TextWrapping="Wrap" />
                                     </StackPanel>
                                     <Button Grid.Column="1"
-                                            Style="{StaticResource IconButtonStyle}"
-                                            Background="{DynamicResource TextSecondary}"
-                                            Foreground="{DynamicResource TextPrimary}"
+                                            Style="{StaticResource PanelToolbarButtonStyle}"
                                             MinWidth="42"
                                             Width="42"
                                             Height="38"
@@ -3036,6 +3188,13 @@
                                                              FocusVisualStyle="{x:Null}"
                                                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                                              ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                                                    <RichTextBox.Style>
+                                                        <Style TargetType="RichTextBox">
+                                                            <EventSetter Event="PreviewMouseLeftButtonUp" Handler="SelectableText_PreviewMouseLeftButtonUp" />
+                                                            <EventSetter Event="PreviewMouseMove" Handler="SelectableText_PreviewMouseMove" />
+                                                            <EventSetter Event="SelectionChanged" Handler="SelectableText_SelectionChanged" />
+                                                        </Style>
+                                                    </RichTextBox.Style>
                                                     <FlowDocument x:Name="StrongsDefinitionDocument"
                                                                   PagePadding="0"
                                                                   FontFamily="Segoe UI"
@@ -3564,6 +3723,164 @@
                          Opacity="1" />
             </Canvas>
         </Grid>
+
+        <Popup x:Name="SelectionActionPopup"
+               AllowsTransparency="True"
+               Placement="MousePoint"
+               HorizontalOffset="-18"
+               VerticalOffset="-35"
+               StaysOpen="True"
+               PopupAnimation="Fade">
+            <Canvas x:Name="SelectionActionMenuRoot"
+                    Width="205" Height="135" Margin="8" Background="Transparent"
+                    MouseLeave="SelectionActionMenu_MouseLeave">
+                <Canvas.LayoutTransform>
+                    <ScaleTransform ScaleX="0.75" ScaleY="0.75" />
+                </Canvas.LayoutTransform>
+                <Path x:Name="SelectionActionCurve"
+                      Data="M 30,35 C 80,35 145,65 175,105"
+                      Stroke="{DynamicResource AppBackground}"
+                      StrokeThickness="46"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round">
+                    <Path.Effect>
+                        <DropShadowEffect Color="#000000" BlurRadius="18" ShadowDepth="5" Opacity="0.42" />
+                    </Path.Effect>
+                </Path>
+                    <Button x:Name="SelectionHighlightButton" Style="{StaticResource SelectionActionButtonStyle}" Width="38" Height="38"
+                            Canvas.Left="6" Canvas.Top="6" Background="{DynamicResource PanelBackground}"
+                            ToolTip="Highlight" MouseEnter="SelectionActionButton_MouseEnter" Click="SelectionHighlight_Click">
+                        <TextBlock Text="▰" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Button>
+                    <Button x:Name="SelectionCopyButton" Style="{StaticResource SelectionActionButtonStyle}" Width="38" Height="38"
+                            Canvas.Left="50" Canvas.Top="12" Background="{DynamicResource PanelBackground}"
+                            ToolTip="Copy" MouseEnter="SelectionActionButton_MouseEnter" Click="SelectionCopy_Click">
+                        <TextBlock Text="⧉" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Button>
+                    <Button x:Name="SelectionPasteButton" Style="{StaticResource SelectionActionButtonStyle}" Width="38" Height="38"
+                            Canvas.Left="91" Canvas.Top="34" Background="{DynamicResource PanelBackground}"
+                            ToolTip="Paste" MouseEnter="SelectionActionButton_MouseEnter" Click="SelectionPaste_Click">
+                        <TextBlock Text="▣" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Button>
+                    <Button x:Name="SelectionAddNoteButton" Style="{StaticResource SelectionActionButtonStyle}" Width="38" Height="38"
+                            Canvas.Left="126" Canvas.Top="67" Background="{DynamicResource PanelBackground}"
+                            ToolTip="Add note" MouseEnter="SelectionActionButton_MouseEnter" Click="SelectionAddNote_Click">
+                        <TextBlock Text="＋" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Button>
+                    <Button x:Name="SelectionDeleteHighlightButton" Style="{StaticResource SelectionActionButtonStyle}" Width="38" Height="38"
+                            Canvas.Left="153" Canvas.Top="106" Background="{DynamicResource PanelBackground}"
+                            ToolTip="Remove highlight" MouseEnter="SelectionActionButton_MouseEnter" Click="SelectionDeleteHighlight_Click">
+                        <TextBlock Text="◇" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Button>
+                    <Button x:Name="SelectionDeleteNoteButton" Style="{StaticResource SelectionActionButtonStyle}" Width="38" Height="38"
+                            Canvas.Left="181" Canvas.Top="146" Background="{DynamicResource PanelBackground}"
+                            ToolTip="Delete note" MouseEnter="SelectionActionButton_MouseEnter" Click="SelectionDeleteNote_Click">
+                        <TextBlock Text="−" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Button>
+            </Canvas>
+        </Popup>
+
+        <Popup x:Name="HighlightColorPopup"
+               PlacementTarget="{Binding ElementName=SelectionHighlightButton}"
+               Placement="Bottom"
+               AllowsTransparency="True"
+               StaysOpen="False"
+               Closed="SelectionSubmenu_Closed"
+               PopupAnimation="Fade">
+            <Border x:Name="HighlightColorCard"
+                    Background="{DynamicResource AppBackground}"
+                    CornerRadius="18,18,18,6"
+                    Padding="10"
+                    Margin="5">
+                <Border.Effect>
+                    <DropShadowEffect Color="#000000" BlurRadius="15" ShadowDepth="4" Opacity="0.38" />
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock Text="Highlight color" Foreground="{DynamicResource TextSecondary}"
+                               FontSize="11" FontWeight="Bold" Margin="4,0,4,8" />
+                    <StackPanel Orientation="Horizontal">
+                        <Button Style="{StaticResource HighlightSwatchStyle}" Tag="#F4C95D" Background="#F4C95D" Click="HighlightColor_Click" />
+                        <Button Style="{StaticResource HighlightSwatchStyle}" Tag="#F28B82" Background="#F28B82" Click="HighlightColor_Click" />
+                        <Button Style="{StaticResource HighlightSwatchStyle}" Tag="#81C995" Background="#81C995" Click="HighlightColor_Click" />
+                        <Button Style="{StaticResource HighlightSwatchStyle}" Tag="#78D9EC" Background="#78D9EC" Click="HighlightColor_Click" />
+                        <Button Style="{StaticResource HighlightSwatchStyle}" Tag="#AECBFA" Background="#AECBFA" Click="HighlightColor_Click" />
+                        <Button Style="{StaticResource HighlightSwatchStyle}" Tag="#D7AEFB" Background="#D7AEFB" Click="HighlightColor_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Popup>
+
+        <Popup x:Name="AnnotationNotePopup"
+               PlacementTarget="{Binding ElementName=SelectionAddNoteButton}"
+               Placement="Bottom"
+               AllowsTransparency="True"
+               StaysOpen="False"
+               Closed="AnnotationNotePopup_Closed">
+            <Border x:Name="AnnotationNoteCard"
+                    Width="340"
+                    Background="{DynamicResource AppBackground}"
+                    CornerRadius="24,24,24,7"
+                    Padding="16"
+                    Margin="8"
+                    Opacity="0"
+                    RenderTransformOrigin="0.5,0">
+                <Border.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="AnnotationNoteCardScale" ScaleX="0.9" ScaleY="0.9" />
+                        <TranslateTransform x:Name="AnnotationNoteCardTranslate" Y="-8" />
+                    </TransformGroup>
+                </Border.RenderTransform>
+                <Border.Effect>
+                    <DropShadowEffect Color="#000000" BlurRadius="22" ShadowDepth="6" Opacity="0.44" />
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock Text="Note for this text"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="17"
+                               FontWeight="Black"
+                               Margin="4,0,4,10" />
+                    <Border Background="{DynamicResource PanelBackground}"
+                            CornerRadius="16"
+                            Padding="12">
+                        <TextBox x:Name="AnnotationNoteTextBox"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 MinHeight="92"
+                                 MaxHeight="150"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 Foreground="{DynamicResource TextPrimary}"
+                                 CaretBrush="{DynamicResource Mint}"
+                                 FontSize="14"
+                                 Padding="0"
+                                 VerticalScrollBarVisibility="Auto">
+                            <TextBox.Template>
+                                <ControlTemplate TargetType="TextBox">
+                                    <ScrollViewer x:Name="PART_ContentHost" />
+                                </ControlTemplate>
+                            </TextBox.Template>
+                        </TextBox>
+                    </Border>
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                Margin="0,12,0,0">
+                        <Button Style="{StaticResource SelectionActionButtonStyle}"
+                                Width="82" Height="38" Content="Cancel" Padding="0"
+                                HorizontalContentAlignment="Center"
+                                Click="AnnotationNoteCancel_Click" />
+                        <Button Style="{StaticResource SelectionActionButtonStyle}"
+                                Width="100" Height="38" Margin="8,0,0,0"
+                                Background="{DynamicResource Mint}"
+                                Foreground="{DynamicResource AppBackground}"
+                                Padding="0"
+                                HorizontalContentAlignment="Center"
+                                Content="Save note"
+                                Click="AnnotationNoteSave_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Popup>
 
         <Border x:Name="ToastHost"
                 Grid.ColumnSpan="2"

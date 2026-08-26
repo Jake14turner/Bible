@@ -29,3 +29,5 @@ artifacts/
 *.tmp
 *.temp
 *.bak
+
+*.codex_obj

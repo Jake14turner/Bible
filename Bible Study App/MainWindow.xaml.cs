@@ -6,6 +6,7 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -15,6 +16,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
@@ -23,8 +25,11 @@ namespace Bible_Study_App;
 
 public partial class MainWindow : Window
 {
+    private const int DwmwaBorderColor = 34;
+    private const int DwmwaCaptionColor = 35;
+    private const int DwmwaTextColor = 36;
     private const string BackendApiUrl = "http://localhost:5055";
-    private const string DefaultOverviewPrompt = "Summarize this study and give one clear next step.";
+    private const string DefaultOverviewPrompt = "Summarize the most important insight from the available study notes and scripture, connect them when both are present, and give one clear next step.";
     private static readonly HttpClient BackendHttpClient = new();
     private static readonly Dictionary<string, int[]> BibleVerseCounts = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -97,6 +102,7 @@ public partial class MainWindow : Window
     };
     private readonly Dictionary<string, WorkspaceItem> _workspaceByBook = new();
     private readonly Dictionary<string, ExtraPanelRuntime> _extraPanelRuntimes = new();
+    private readonly Dictionary<TextBox, TextAnnotationAdorner> _textAnnotationAdorners = new();
     private readonly ObservableCollection<EditorCommandOption> _filteredSlashCommands = new();
     private readonly Brush[] _accentPalette;
     private readonly List<EditorCommandOption> _slashCommands;
@@ -110,6 +116,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<ReminderScheduleItem> _reminderScheduleItems = new();
     private readonly ObservableCollection<ReminderPreset> _reminderPresets = new();
     private readonly ObservableCollection<ColorSchemePreset> _colorSchemePresets = new();
+    private readonly ObservableCollection<string> _availableAiModels = new();
     private readonly ObservableCollection<ScriptureVerseDisplay> _scriptureVerses = new();
     private readonly List<ScheduledNotificationState> _scheduledNotifications = new();
     private readonly Dictionary<string, DailyNoteState> _dailyNotesByDate = new();
@@ -121,6 +128,7 @@ public partial class MainWindow : Window
     private enum DefinitionLineKind { Lead, Main, Sub }
     private sealed record DefinitionLine(DefinitionLineKind Kind, string Marker, string Text);
     private sealed record VerseReference(string DisplayText, string BookName, int Chapter, int Verse);
+    private sealed record SelectionSegment(Control Target, string SourceKey, int Start, int Length, string Text);
     private enum MovablePanelKind { Editor, Scripture, Strongs }
     private enum PanelPreset { Top, Left, Right, Bottom, Float }
     private static readonly Brush PanelPresetIdleBrush = BrushFrom("#E6DDAA");
@@ -163,13 +171,16 @@ public partial class MainWindow : Window
     private bool _isLoadingDailyDetails;
     private bool _isLoadingReminderSettings;
     private bool _isInitializing = true;
+    private bool _isRestoringStudyPanelGeometry;
     private bool _sidebarCollapsed;
     private bool _scripturePanelHidden;
     private bool _strongsEnabled;
     private bool _greekLexiconLoaded;
+    private bool _isRefreshingAiModels;
     private bool _suppressRenameCommit;
     private GridLength _scripturePanelVisibleWidth = new(440);
     private GridLength _strongsPanelVisibleWidth = new(330);
+    private string _selectedAiModel = "llama3.2:latest";
     private MovablePanelKind? _draggingPanelKind;
     private TranslateTransform? _draggingPanelTransform;
     private UIElement? _draggingPanelHandle;
@@ -198,6 +209,23 @@ public partial class MainWindow : Window
     private PanelPreset _scripturePanelPreset = PanelPreset.Right;
     private PanelPreset _strongsPanelPreset = PanelPreset.Right;
     private int _topPanelZIndex = 130;
+    private Control? _selectionTarget;
+    private string _selectionSourceKey = string.Empty;
+    private int _selectionStart;
+    private int _selectionLength;
+    private string _selectionText = string.Empty;
+    private TextRange? _selectedRichTextRange;
+    private ToolTip? _annotationToolTip;
+    private readonly List<SelectionSegment> _selectionSegments = new();
+    private readonly List<TextAnnotationState> _multiBlockSelectionPreview = new();
+    private TextBox? _multiSelectStartTextBox;
+    private int _multiSelectStartIndex;
+    private TextBox? _multiSelectEndTextBox;
+    private int _multiSelectEndIndex;
+    private bool _isMultiBlockDragging;
+    private bool _isClosingSelectionUi;
+    private bool _suppressSelectionSubmenuClose;
+    private IReadOnlyList<TextAnnotationState> _pendingNoteAnnotations = [];
 
     public ObservableCollection<BibleBook> BibleBooks { get; } = new();
     public ObservableCollection<BibleBook> OldTestamentBooks { get; } = new();
@@ -206,6 +234,13 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        SourceInitialized += (_, _) => UpdateNativeTitleBarColors();
+        Deactivated += (_, _) => CloseSelectionUi();
+        Application.Current.Exit += (_, _) => SaveWorkspaceState();
+
+        AddHandler(Mouse.PreviewMouseDownEvent, new MouseButtonEventHandler(StudyBlocks_PreviewMouseDown), true);
+        AddHandler(Mouse.PreviewMouseMoveEvent, new MouseEventHandler(StudyBlocks_PreviewMouseMove), true);
+        AddHandler(Mouse.PreviewMouseUpEvent, new MouseButtonEventHandler(StudyBlocks_PreviewMouseUp), true);
 
         _accentPalette =
         [
@@ -261,6 +296,7 @@ public partial class MainWindow : Window
         ReminderScheduleItems.ItemsSource = _reminderScheduleItems;
         ReminderPresetSelect.ItemsSource = _reminderPresets;
         ColorSchemePresetItems.ItemsSource = _colorSchemePresets;
+        AiModelComboBox.ItemsSource = _availableAiModels;
         LoadWorkspaceState();
         LoadScriptureText();
         LoadTagntData();
@@ -269,10 +305,14 @@ public partial class MainWindow : Window
         RenderTodayDashboard();
         SetActiveNavTab(AppNavTab.BibleStudy);
         _isInitializing = false;
+        LocationChanged += WindowPlacement_Changed;
+        SizeChanged += WindowPlacement_Changed;
+        StateChanged += WindowPlacement_Changed;
     }
 
     protected override void OnClosing(CancelEventArgs e)
     {
+        CommitLivePanelStateForShutdown();
         StopBibleBooksSmoothScroll();
         StopScriptureSmoothScroll();
         StopStudyEditorSmoothScroll();
@@ -283,6 +323,35 @@ public partial class MainWindow : Window
         StopScrollBarRevealTimers();
         SaveWorkspaceState();
         base.OnClosing(e);
+    }
+
+    private void CommitLivePanelStateForShutdown()
+    {
+        if (_draggingPanelKind is not null && _draggingPanelTransform is not null)
+        {
+            var offset = ClampPanelOffset(_draggingPanelKind.Value, _panelDragPendingOffset);
+            _draggingPanelTransform.BeginAnimation(TranslateTransform.XProperty, null);
+            _draggingPanelTransform.BeginAnimation(TranslateTransform.YProperty, null);
+            _draggingPanelTransform.X = offset.X;
+            _draggingPanelTransform.Y = offset.Y;
+        }
+
+        if (_resizingPanelKind is not null)
+        {
+            ApplyPendingPanelResize(updateAvoidance: false);
+        }
+
+        SnapshotCurrentStudyPanelGeometry();
+        foreach (var runtime in _extraPanelRuntimes.Values)
+        {
+            runtime.State.Geometry = new PanelGeometryState
+            {
+                X = Math.Round(runtime.Transform.X, 2),
+                Y = Math.Round(runtime.Transform.Y, 2),
+                Width = Math.Round(runtime.Root.ActualWidth > 0 ? runtime.Root.ActualWidth : runtime.Root.Width, 2),
+                Height = Math.Round(runtime.Root.ActualHeight > 0 ? runtime.Root.ActualHeight : runtime.Root.Height, 2)
+            };
+        }
     }
 
     private void LoadBibleBooks()
@@ -406,6 +475,7 @@ public partial class MainWindow : Window
                 return;
             }
 
+            RestoreWindowPlacement(state.WindowPlacement);
             _workspaceByBook.Clear();
             _dailyNotesByDate.Clear();
             _scheduledNotifications.Clear();
@@ -460,6 +530,10 @@ public partial class MainWindow : Window
         item.EditorPanelGeometry = state.EditorPanelGeometry;
         item.ScripturePanelGeometry = state.ScripturePanelGeometry;
         item.StrongsPanelGeometry = state.StrongsPanelGeometry;
+        foreach (var annotation in state.TextAnnotations)
+        {
+            item.TextAnnotations.Add(annotation);
+        }
         item.ExtraPanels.Clear();
         foreach (var extraPanel in state.ExtraPanels)
         {
@@ -502,6 +576,61 @@ public partial class MainWindow : Window
 
         _workspaceSaveTimer.Stop();
         _workspaceSaveTimer.Start();
+    }
+
+    private void WindowPlacement_Changed(object? sender, EventArgs e)
+    {
+        if (!_isInitializing)
+        {
+            QueueWorkspaceSave();
+        }
+    }
+
+    private WindowPlacementState CreateWindowPlacementState()
+    {
+        var bounds = WindowState == WindowState.Normal
+            ? new Rect(Left, Top, ActualWidth > 0 ? ActualWidth : Width, ActualHeight > 0 ? ActualHeight : Height)
+            : RestoreBounds;
+
+        return new WindowPlacementState
+        {
+            Left = bounds.Left,
+            Top = bounds.Top,
+            Width = bounds.Width,
+            Height = bounds.Height,
+            IsMaximized = WindowState == WindowState.Maximized
+        };
+    }
+
+    private void RestoreWindowPlacement(WindowPlacementState? placement)
+    {
+        if (placement is null ||
+            !double.IsFinite(placement.Left) ||
+            !double.IsFinite(placement.Top) ||
+            !double.IsFinite(placement.Width) ||
+            !double.IsFinite(placement.Height) ||
+            placement.Width < MinWidth ||
+            placement.Height < MinHeight)
+        {
+            return;
+        }
+
+        const double minimumVisiblePixels = 96;
+        var virtualLeft = SystemParameters.VirtualScreenLeft;
+        var virtualTop = SystemParameters.VirtualScreenTop;
+        var virtualRight = virtualLeft + SystemParameters.VirtualScreenWidth;
+        var virtualBottom = virtualTop + SystemParameters.VirtualScreenHeight;
+        var width = Math.Min(placement.Width, SystemParameters.VirtualScreenWidth);
+        var height = Math.Min(placement.Height, SystemParameters.VirtualScreenHeight);
+        var left = Math.Clamp(placement.Left, virtualLeft - width + minimumVisiblePixels, virtualRight - minimumVisiblePixels);
+        var top = Math.Clamp(placement.Top, virtualTop, virtualBottom - minimumVisiblePixels);
+
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Left = left;
+        Top = top;
+        Width = width;
+        Height = height;
+        WindowState = placement.IsMaximized ? WindowState.Maximized : WindowState.Normal;
     }
 
     private void ShowToast(string message)
@@ -586,14 +715,22 @@ public partial class MainWindow : Window
                 OldTestamentBooksExpanded = OldTestamentBooksExpander.IsExpanded,
                 NewTestamentBooksExpanded = NewTestamentBooksExpander.IsExpanded,
                 ReminderSettings = CreateReminderSettingsState(),
-                ColorSettings = CreateColorSettingsState()
+                ColorSettings = CreateColorSettingsState(),
+                WindowPlacement = CreateWindowPlacementState()
             };
             var json = JsonSerializer.Serialize(state, new JsonSerializerOptions
             {
                 WriteIndented = true
             });
             var tempPath = $"{_workspaceFilePath}.tmp";
-            File.WriteAllText(tempPath, json);
+            using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None,
+                       bufferSize: 4096, FileOptions.WriteThrough))
+            using (var writer = new StreamWriter(stream, leaveOpen: true))
+            {
+                writer.Write(json);
+                writer.Flush();
+                stream.Flush(flushToDisk: true);
+            }
             File.Move(tempPath, _workspaceFilePath, true);
         }
         catch (Exception ex)
@@ -680,6 +817,7 @@ public partial class MainWindow : Window
             EditorPanelGeometry = item.EditorPanelGeometry,
             ScripturePanelGeometry = item.ScripturePanelGeometry,
             StrongsPanelGeometry = item.StrongsPanelGeometry,
+            TextAnnotations = item.TextAnnotations.ToList(),
             ExtraPanels = item.ExtraPanels.ToList(),
             Children = item.Children
                 .Select(CreateWorkspaceItemState)
@@ -707,6 +845,9 @@ public partial class MainWindow : Window
         _reminderPresets.Clear();
 
         var source = settings ?? CreateDefaultReminderSettingsState();
+        _selectedAiModel = string.IsNullOrWhiteSpace(source.AiModel)
+            ? "llama3.2:latest"
+            : source.AiModel.Trim();
         OverviewNotificationEnabledCheckBox.IsChecked = source.OverviewEnabled;
         OverviewPromptTextBox.Text = string.IsNullOrWhiteSpace(source.OverviewPrompt)
             ? DefaultOverviewPrompt
@@ -752,6 +893,7 @@ public partial class MainWindow : Window
     {
         return new ReminderSettingsState
         {
+            AiModel = _selectedAiModel,
             OverviewEnabled = OverviewNotificationEnabledCheckBox.IsChecked == true,
             OverviewPrompt = string.IsNullOrWhiteSpace(OverviewPromptTextBox.Text)
                 ? DefaultOverviewPrompt
@@ -776,6 +918,7 @@ public partial class MainWindow : Window
     {
         return new ReminderSettingsState
         {
+            AiModel = "llama3.2:latest",
             OverviewEnabled = true,
             OverviewPrompt = DefaultOverviewPrompt,
             RemindersEnabled = true,
@@ -854,8 +997,43 @@ public partial class MainWindow : Window
         SetBrushColor("TextMuted", preset.TextSecondary);
         SetBrushColor("StrokeSoft", preset.AppBackground);
         SetBrushColor("Coral", preset.Accent);
+        UpdateNativeTitleBarColors(preset);
         RefreshStudyBlockThemeBrushes();
     }
+
+    private void UpdateNativeTitleBarColors(ColorSchemePreset? preset = null)
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var selected = preset ?? _colorSchemePresets.FirstOrDefault(candidate =>
+            string.Equals(candidate.Name, _selectedColorSchemeName, StringComparison.OrdinalIgnoreCase));
+        if (selected is null
+            || !TryParseColor(selected.AppBackground, out var captionColor)
+            || !TryParseColor(selected.TextPrimary, out var textColor)
+            || !TryParseColor(selected.Accent, out var borderColor))
+        {
+            return;
+        }
+
+        var caption = ToColorRef(captionColor);
+        var text = ToColorRef(textColor);
+        var border = ToColorRef(borderColor);
+        _ = DwmSetWindowAttribute(handle, DwmwaCaptionColor, ref caption, sizeof(uint));
+        _ = DwmSetWindowAttribute(handle, DwmwaTextColor, ref text, sizeof(uint));
+        _ = DwmSetWindowAttribute(handle, DwmwaBorderColor, ref border, sizeof(uint));
+    }
+
+    private static uint ToColorRef(Color color)
+    {
+        return (uint)(color.R | color.G << 8 | color.B << 16);
+    }
+
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    private static extern int DwmSetWindowAttribute(IntPtr windowHandle, int attribute, ref uint value, int valueSize);
 
     private void SetBrushColor(string resourceName, string hex)
     {
@@ -953,6 +1131,7 @@ public partial class MainWindow : Window
 
     private void RunPageTransition(object? source, Action switchPage)
     {
+        CloseSelectionUi();
         if (_isPageTransitioning || MainContentRoot is null || PageTransitionOverlay is null || PageTransitionCircle is null)
         {
             switchPage();
@@ -1273,7 +1452,7 @@ public partial class MainWindow : Window
 
     private void BackOneLevel()
     {
-        if (IsColorThemeSettingsPanelVisible() || ReminderSettingsPanel.Visibility == Visibility.Visible)
+        if (IsColorThemeSettingsPanelVisible() || IsLocalAiSettingsPanelVisible() || ReminderSettingsPanel.Visibility == Visibility.Visible)
         {
             ShowSettings();
             return;
@@ -1384,6 +1563,11 @@ public partial class MainWindow : Window
         RunPageTransition(sender, ShowColorThemeSettings);
     }
 
+    private void LocalAiSettings_Click(object sender, RoutedEventArgs e)
+    {
+        RunPageTransition(sender, ShowLocalAiSettings);
+    }
+
     private void ShowSettings()
     {
         _currentStudy = null;
@@ -1402,6 +1586,109 @@ public partial class MainWindow : Window
         PassagePickerCard.Visibility = Visibility.Collapsed;
         SetActiveNavTab(AppNavTab.Settings);
         RenderBreadcrumbs();
+    }
+
+    private void ShowLocalAiSettings()
+    {
+        _currentStudy = null;
+        LibraryPanel.Visibility = Visibility.Collapsed;
+        WorkspacePanel.Visibility = Visibility.Collapsed;
+        StudyPanel.Visibility = Visibility.Collapsed;
+        TodayPanel.Visibility = Visibility.Collapsed;
+        ReminderSettingsPanel.Visibility = Visibility.Collapsed;
+        SetSettingsPanelVisibility(Visibility.Collapsed);
+        SetLocalAiSettingsPanelVisibility(Visibility.Visible);
+        MainHeading.Text = "Local AI Model";
+        MainSubheading.Visibility = Visibility.Collapsed;
+        FlattenContentShell();
+        HeaderBackButton.Visibility = Visibility.Visible;
+        WorkspaceStatusCard.Visibility = Visibility.Collapsed;
+        PassagePickerCard.Visibility = Visibility.Collapsed;
+        SetActiveNavTab(AppNavTab.Settings);
+        RenderBreadcrumbs();
+        _ = RefreshAiModelsAsync();
+    }
+
+    private async void RefreshAiModels_Click(object sender, RoutedEventArgs e)
+    {
+        await RefreshAiModelsAsync();
+    }
+
+    private async Task RefreshAiModelsAsync()
+    {
+        if (_isRefreshingAiModels || AiModelComboBox is null || AiModelStatusText is null)
+        {
+            return;
+        }
+
+        _isRefreshingAiModels = true;
+        RefreshAiModelsButton.IsEnabled = false;
+        AiModelComboBox.IsEnabled = false;
+        AiModelStatusText.Text = "Starting Ollama and checking downloaded models...";
+        try
+        {
+            await EnsureBackendRunningAsync();
+            using var response = await BackendHttpClient.GetAsync($"{BackendApiUrl}/api/ai/status");
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException($"Backend returned {(int)response.StatusCode}: {error}");
+            }
+
+            var status = await response.Content.ReadFromJsonAsync<OllamaStatusApiResponse>()
+                ?? throw new InvalidOperationException("Backend returned an empty Ollama status response.");
+            _availableAiModels.Clear();
+            foreach (var model in status.Models
+                         .Where(model => !string.IsNullOrWhiteSpace(model))
+                         .Distinct(StringComparer.OrdinalIgnoreCase)
+                         .OrderBy(model => model, StringComparer.OrdinalIgnoreCase))
+            {
+                _availableAiModels.Add(model);
+            }
+
+            if (status.Running && _availableAiModels.Count > 0)
+            {
+                var selectedModel = _availableAiModels.FirstOrDefault(model =>
+                                        string.Equals(model, _selectedAiModel, StringComparison.OrdinalIgnoreCase))
+                                    ?? _availableAiModels.FirstOrDefault(model =>
+                                        string.Equals(model, status.ConfiguredModel, StringComparison.OrdinalIgnoreCase))
+                                    ?? _availableAiModels[0];
+                _selectedAiModel = selectedModel;
+                AiModelComboBox.SelectedItem = selectedModel;
+                AiModelComboBox.IsEnabled = true;
+                AiModelStatusText.Text = $"Ollama is running. {_availableAiModels.Count} downloaded model{(_availableAiModels.Count == 1 ? string.Empty : "s")} available.";
+                QueueWorkspaceSave();
+            }
+            else
+            {
+                AiModelComboBox.SelectedIndex = -1;
+                AiModelStatusText.Text = status.Error
+                    ?? "Ollama is not running or has no downloaded models.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _availableAiModels.Clear();
+            AiModelComboBox.SelectedIndex = -1;
+            AiModelStatusText.Text = $"Could not check Ollama: {FormatExceptionMessage(ex)}";
+        }
+        finally
+        {
+            RefreshAiModelsButton.IsEnabled = true;
+            _isRefreshingAiModels = false;
+        }
+    }
+
+    private void AiModelComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isRefreshingAiModels || AiModelComboBox.SelectedItem is not string model)
+        {
+            return;
+        }
+
+        _selectedAiModel = model;
+        QueueWorkspaceSave();
+        ShowToast($"AI model set to {model}");
     }
 
     private void ShowColorThemeSettings()
@@ -1473,6 +1760,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (IsLocalAiSettingsPanelVisible())
+        {
+            AddBreadcrumb("Settings", BreadcrumbTarget.Settings, null, false);
+            AddBreadcrumb("Local AI Model", BreadcrumbTarget.LocalAiSettings, null, false);
+            return;
+        }
+
         if (IsSettingsPanelVisible())
         {
             AddBreadcrumb("Settings", BreadcrumbTarget.Settings, null, false);
@@ -1503,10 +1797,8 @@ public partial class MainWindow : Window
             SettingsPanel.Visibility = visibility;
         }
 
-        if (visibility == Visibility.Collapsed)
-        {
-            SetColorThemeSettingsPanelVisibility(Visibility.Collapsed);
-        }
+        SetColorThemeSettingsPanelVisibility(Visibility.Collapsed);
+        SetLocalAiSettingsPanelVisibility(Visibility.Collapsed);
     }
 
     private bool IsSettingsPanelVisible()
@@ -1525,6 +1817,19 @@ public partial class MainWindow : Window
     private bool IsColorThemeSettingsPanelVisible()
     {
         return ColorThemeSettingsPanel is not null && ColorThemeSettingsPanel.Visibility == Visibility.Visible;
+    }
+
+    private void SetLocalAiSettingsPanelVisibility(Visibility visibility)
+    {
+        if (LocalAiSettingsPanel is not null)
+        {
+            LocalAiSettingsPanel.Visibility = visibility;
+        }
+    }
+
+    private bool IsLocalAiSettingsPanelVisible()
+    {
+        return LocalAiSettingsPanel is not null && LocalAiSettingsPanel.Visibility == Visibility.Visible;
     }
 
     private void AddBreadcrumb(string text, BreadcrumbTarget target, object? tag, bool isFirst)
@@ -1608,11 +1913,15 @@ public partial class MainWindow : Window
             case BreadcrumbTarget.ColorThemeSettings:
                 ShowColorThemeSettings();
                 break;
+            case BreadcrumbTarget.LocalAiSettings:
+                ShowLocalAiSettings();
+                break;
         }
     }
 
     private void OpenStudy(WorkspaceItem study)
     {
+        _isRestoringStudyPanelGeometry = true;
         _currentStudy = study;
         TodayPanel.Visibility = Visibility.Collapsed;
         ReminderSettingsPanel.Visibility = Visibility.Collapsed;
@@ -1633,14 +1942,22 @@ public partial class MainWindow : Window
         SetActiveNavTab(AppNavTab.BibleStudy);
         Dispatcher.BeginInvoke(() =>
         {
-            ApplyStudyPanelGeometry(study);
-            RenderExtraStudyPanels();
+            try
+            {
+                ApplyStudyPanelGeometry(study);
+                RenderExtraStudyPanels();
+            }
+            finally
+            {
+                _isRestoringStudyPanelGeometry = false;
+            }
         }, DispatcherPriority.Loaded);
         FocusBlock(study.Blocks[0]);
     }
 
     private void SetActiveNavTab(AppNavTab activeTab)
     {
+        CloseSelectionUi();
         _activeNavTab = activeTab;
         BibleStudyNavButton.Style = (Style)FindResource(activeTab == AppNavTab.BibleStudy
             ? "ActiveNavButtonStyle"
@@ -3724,10 +4041,36 @@ public partial class MainWindow : Window
                 return match;
             }
 
-            source = VisualTreeHelper.GetParent(source);
+            source = GetTraversalParent(source);
         }
 
         return null;
+    }
+
+    private static bool IsDescendantOf(DependencyObject? source, DependencyObject ancestor)
+    {
+        while (source is not null)
+        {
+            if (ReferenceEquals(source, ancestor))
+            {
+                return true;
+            }
+
+            source = GetTraversalParent(source);
+        }
+
+        return false;
+    }
+
+    private static DependencyObject? GetTraversalParent(DependencyObject source)
+    {
+        return source switch
+        {
+            Visual or System.Windows.Media.Media3D.Visual3D => VisualTreeHelper.GetParent(source),
+            FrameworkContentElement frameworkContent => frameworkContent.Parent ?? ContentOperations.GetParent(frameworkContent),
+            ContentElement content => ContentOperations.GetParent(content),
+            _ => LogicalTreeHelper.GetParent(source)
+        };
     }
 
     private void ScriptureFontSizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -3850,6 +4193,8 @@ public partial class MainWindow : Window
             ScriptureDocument.Blocks.Add(paragraph);
             _scriptureParagraphsByVerse[verse.VerseNumber] = paragraph;
         }
+
+        ApplySavedRichTextAnnotations(ScriptureTextView);
     }
 
     private void AddTaggedScriptureRuns(Paragraph paragraph, ScriptureVerseDisplay verse, IReadOnlyList<TagntWordEntry> tagntEntries)
@@ -4160,6 +4505,8 @@ public partial class MainWindow : Window
             study.Name,
             CreateStudyReference(study),
             CreateSelectedScriptureText(study),
+            CreateStudyNotesText(study),
+            _selectedAiModel,
             OverviewNotificationEnabledCheckBox.IsChecked == true,
             NormalizeOverviewInstruction(OverviewPromptTextBox.Text),
             RemindersEnabledCheckBox.IsChecked == true,
@@ -4294,8 +4641,41 @@ public partial class MainWindow : Window
     {
         var root = GetRootWorkspace(study);
         return study.PassageLabel == "No passage selected"
-            ? root.Name
+            ? string.Empty
             : $"{root.Name} {study.PassageLabel}";
+    }
+
+    private static string CreateStudyNotesText(WorkspaceItem study)
+    {
+        var notes = new List<string>();
+        foreach (var block in study.Blocks.Where(block => !string.IsNullOrWhiteSpace(block.Text)))
+        {
+            var text = block.Text.Trim();
+            var formatted = block.Kind switch
+            {
+                EditorBlockKind.HeadingOne => $"# {text}",
+                EditorBlockKind.HeadingTwo => $"## {text}",
+                EditorBlockKind.HeadingThree => $"### {text}",
+                EditorBlockKind.Quote => $"> {text}",
+                EditorBlockKind.BulletedList => $"- {text}",
+                EditorBlockKind.NumberedList => $"1. {text}",
+                EditorBlockKind.Todo => $"- [{(block.IsChecked ? "x" : " ")}] {text}",
+                EditorBlockKind.Callout => $"Important: {text}",
+                EditorBlockKind.Code => $"Study detail: {text}",
+                _ => text
+            };
+            notes.Add(formatted);
+        }
+
+        foreach (var notesPanel in study.ExtraPanels.Where(panel =>
+                     panel.Kind == ExtraStudyPanelKind.Notes
+                     && !string.IsNullOrWhiteSpace(panel.NotesText)))
+        {
+            var title = string.IsNullOrWhiteSpace(notesPanel.Title) ? "Notes panel" : notesPanel.Title.Trim();
+            notes.Add($"## {title}\n{notesPanel.NotesText.Trim()}");
+        }
+
+        return string.Join("\n", notes);
     }
 
     private string CreateSelectedScriptureText(WorkspaceItem study)
@@ -4570,6 +4950,7 @@ public partial class MainWindow : Window
 
         _activeStudyBlock = block;
         _activeStudyTextBox = textBox;
+        SelectableText_SelectionChanged(textBox, e);
         QueueSmoothEditorCaretUpdate();
     }
 
@@ -5631,16 +6012,6 @@ public partial class MainWindow : Window
         AddExtraScripturePanel(reference.BookName, reference.Chapter, reference.Verse, $"Opened from {reference.DisplayText}");
     }
 
-    private void AddFloatingPanelButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (AddFloatingPanelButton.ContextMenu is { } menu)
-        {
-            menu.PlacementTarget = AddFloatingPanelButton;
-            menu.Placement = PlacementMode.Bottom;
-            menu.IsOpen = true;
-        }
-    }
-
     private void AddScripturePanelMenuItem_Click(object sender, RoutedEventArgs e)
     {
         var bookName = _scriptureVisibleBookName
@@ -5656,6 +6027,911 @@ public partial class MainWindow : Window
     private void AddNotesPanelMenuItem_Click(object sender, RoutedEventArgs e)
     {
         AddExtraNotesPanel();
+    }
+
+    private void StudyBlocks_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        var originalSource = e.OriginalSource as DependencyObject;
+        if (IsDescendantOf(originalSource, SelectionActionMenuRoot)
+            || IsDescendantOf(originalSource, HighlightColorCard)
+            || IsDescendantOf(originalSource, AnnotationNoteCard))
+        {
+            return;
+        }
+
+        if (SelectionActionPopup.IsOpen || HighlightColorPopup.IsOpen || AnnotationNotePopup.IsOpen)
+        {
+            CloseSelectionUi();
+        }
+        ClearMultiBlockSelectionPreview();
+        if (e.ChangedButton != MouseButton.Left || FindAncestor<TextBox>(e.OriginalSource as DependencyObject) is not { Tag: StudyBlock } textBox)
+        {
+            _multiSelectStartTextBox = null;
+            return;
+        }
+
+        _multiSelectStartTextBox = textBox;
+        _multiSelectEndTextBox = textBox;
+        _isMultiBlockDragging = false;
+        _multiSelectStartIndex = textBox.GetCharacterIndexFromPoint(e.GetPosition(textBox), true);
+        _multiSelectEndIndex = _multiSelectStartIndex;
+    }
+
+    private void StudyBlocks_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_multiSelectStartTextBox is null || e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var pointer = e.GetPosition(StudyBlockItems);
+        var candidates = FindDescendants<TextBox>(StudyBlockItems)
+            .Where(box => box.Tag is StudyBlock && box.IsVisible)
+            .Select(textBox => new
+            {
+                TextBox = textBox,
+                Origin = textBox.TranslatePoint(new Point(), StudyBlockItems)
+            })
+            .ToList();
+        var target = candidates.FirstOrDefault(candidate =>
+                new Rect(candidate.Origin, candidate.TextBox.RenderSize).Contains(pointer))
+            ?? candidates.OrderBy(candidate => Math.Abs(pointer.Y - (candidate.Origin.Y + candidate.TextBox.ActualHeight / 2))).FirstOrDefault();
+        if (target is not null)
+        {
+            _multiSelectEndTextBox = target.TextBox;
+            var localPoint = e.GetPosition(target.TextBox);
+            localPoint.X = Math.Clamp(localPoint.X, 0, Math.Max(0, target.TextBox.ActualWidth - 1));
+            localPoint.Y = Math.Clamp(localPoint.Y, 0, Math.Max(0, target.TextBox.ActualHeight - 1));
+            _multiSelectEndIndex = target.TextBox.GetCharacterIndexFromPoint(localPoint, true);
+            if (!ReferenceEquals(_multiSelectStartTextBox, _multiSelectEndTextBox) && !_isMultiBlockDragging)
+            {
+                _isMultiBlockDragging = true;
+                Mouse.Capture(this, CaptureMode.SubTree);
+                SmoothEditorCaret.Visibility = Visibility.Collapsed;
+            }
+
+            if (_isMultiBlockDragging)
+            {
+                UpdateMultiBlockSelectionPreview();
+                e.Handled = true;
+            }
+        }
+    }
+
+    private void StudyBlocks_PreviewMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_multiSelectStartTextBox is null || _multiSelectEndTextBox is null
+            || ReferenceEquals(_multiSelectStartTextBox, _multiSelectEndTextBox))
+        {
+            ClearMultiBlockSelectionPreview();
+            if (_isMultiBlockDragging) Mouse.Capture(null);
+            _isMultiBlockDragging = false;
+            _multiSelectStartTextBox = null;
+            return;
+        }
+
+        var startBox = _multiSelectStartTextBox;
+        var endBox = _multiSelectEndTextBox;
+        var startIndex = _multiSelectStartIndex;
+        var endIndex = _multiSelectEndIndex;
+        _multiSelectStartTextBox = null;
+        if (_isMultiBlockDragging) Mouse.Capture(null);
+        _isMultiBlockDragging = false;
+        e.Handled = true;
+        Dispatcher.BeginInvoke(() => ShowMultiBlockSelection(startBox, startIndex, endBox, endIndex), DispatcherPriority.Background);
+    }
+
+    private void ShowMultiBlockSelection(TextBox startBox, int startIndex, TextBox endBox, int endIndex)
+    {
+        _selectionSegments.Clear();
+        _selectionSegments.AddRange(BuildMultiBlockSegments(startBox, startIndex, endBox, endIndex));
+        if (_selectionSegments.Count == 0)
+        {
+            return;
+        }
+        var first = _selectionSegments[0];
+        _selectionTarget = first.Target;
+        _selectionSourceKey = first.SourceKey;
+        _selectionStart = first.Start;
+        _selectionLength = first.Length;
+        _selectionText = string.Join(Environment.NewLine, _selectionSegments.Select(segment => segment.Text));
+        _selectedRichTextRange = null;
+        SelectionPasteButton.Visibility = Visibility.Collapsed;
+        SelectionDeleteHighlightButton.Visibility = FindSelectedAnnotations().Any(annotation => annotation.IsHighlighted) ? Visibility.Visible : Visibility.Collapsed;
+        SelectionDeleteNoteButton.Visibility = FindSelectedAnnotations().Any(annotation => !string.IsNullOrWhiteSpace(annotation.Note)) ? Visibility.Visible : Visibility.Collapsed;
+        LayoutSelectionActionsOnCurve();
+        CollapseSelectionActionButtons();
+        SelectionActionPopup.PlacementTarget = endBox;
+        SelectionActionPopup.IsOpen = true;
+    }
+
+    private List<SelectionSegment> BuildMultiBlockSegments(TextBox startBox, int startIndex, TextBox endBox, int endIndex)
+    {
+        var segments = new List<SelectionSegment>();
+        if (_currentStudy is null || startBox.Tag is not StudyBlock startBlock || endBox.Tag is not StudyBlock endBlock)
+        {
+            return segments;
+        }
+
+        var startBlockIndex = _currentStudy.Blocks.IndexOf(startBlock);
+        var endBlockIndex = _currentStudy.Blocks.IndexOf(endBlock);
+        if (startBlockIndex < 0 || endBlockIndex < 0)
+        {
+            return segments;
+        }
+
+        if (startBlockIndex > endBlockIndex)
+        {
+            (startBlockIndex, endBlockIndex) = (endBlockIndex, startBlockIndex);
+            (startBox, endBox) = (endBox, startBox);
+            (startIndex, endIndex) = (endIndex, startIndex);
+        }
+
+        var boxesByBlock = FindDescendants<TextBox>(StudyBlockItems)
+            .Where(box => box.Tag is StudyBlock)
+            .ToDictionary(box => (StudyBlock)box.Tag);
+        for (var index = startBlockIndex; index <= endBlockIndex; index++)
+        {
+            var block = _currentStudy.Blocks[index];
+            if (!boxesByBlock.TryGetValue(block, out var box))
+            {
+                continue;
+            }
+            var segmentStart = index == startBlockIndex ? Math.Clamp(startIndex, 0, box.Text.Length) : 0;
+            var segmentEnd = index == endBlockIndex ? Math.Clamp(endIndex, 0, box.Text.Length) : box.Text.Length;
+            if (segmentEnd < segmentStart) (segmentStart, segmentEnd) = (segmentEnd, segmentStart);
+            if (segmentEnd == segmentStart) continue;
+            segments.Add(new SelectionSegment(box, $"notes:block:{index}", segmentStart,
+                segmentEnd - segmentStart, box.Text.Substring(segmentStart, segmentEnd - segmentStart)));
+        }
+        return segments;
+    }
+
+    private void UpdateMultiBlockSelectionPreview()
+    {
+        if (_multiSelectStartTextBox is null || _multiSelectEndTextBox is null)
+        {
+            return;
+        }
+        var segments = BuildMultiBlockSegments(_multiSelectStartTextBox, _multiSelectStartIndex,
+            _multiSelectEndTextBox, _multiSelectEndIndex);
+        _multiBlockSelectionPreview.Clear();
+        _multiBlockSelectionPreview.AddRange(segments.Select(segment => new TextAnnotationState
+        {
+            SourceKey = segment.SourceKey,
+            Start = segment.Start,
+            Length = segment.Length,
+            Quote = segment.Text,
+            IsHighlighted = true,
+            HighlightColor = "#AECBFA"
+        }));
+        foreach (var textBox in segments.Select(segment => segment.Target).OfType<TextBox>().Distinct())
+        {
+            EnsureTextAnnotationAdorner(textBox).InvalidateVisual();
+        }
+    }
+
+    private void ClearMultiBlockSelectionPreview()
+    {
+        if (_multiBlockSelectionPreview.Count == 0)
+        {
+            return;
+        }
+        _multiBlockSelectionPreview.Clear();
+        foreach (var adorner in _textAnnotationAdorners.Values)
+        {
+            adorner.InvalidateVisual();
+        }
+    }
+
+    private void SelectableText_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        Dispatcher.BeginInvoke(() => ShowSelectionActions(sender as Control), DispatcherPriority.Input);
+    }
+
+    private void SelectableText_SelectionChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isMultiBlockDragging || !SelectionActionPopup.IsOpen || !ReferenceEquals(sender, _selectionTarget))
+        {
+            return;
+        }
+
+        var selectionIsEmpty = sender switch
+        {
+            TextBox textBox => textBox.SelectionLength == 0,
+            RichTextBox richTextBox => richTextBox.Selection.IsEmpty,
+            _ => false
+        };
+        if (selectionIsEmpty)
+        {
+            CloseSelectionUi();
+        }
+    }
+
+    private void SelectableText_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox textBox)
+        {
+            EnsureTextAnnotationAdorner(textBox).InvalidateVisual();
+        }
+    }
+
+    private void ShowSelectionActions(Control? control)
+    {
+        _selectionSegments.Clear();
+        _selectedRichTextRange = null;
+        _selectionTarget = null;
+        _selectionText = string.Empty;
+
+        if (control is TextBox textBox && textBox.SelectionLength > 0)
+        {
+            _selectionTarget = textBox;
+            _selectionStart = textBox.SelectionStart;
+            _selectionLength = textBox.SelectionLength;
+            _selectionText = textBox.SelectedText;
+            _selectionSourceKey = GetSelectionSourceKey(textBox);
+        }
+        else if (control is RichTextBox richTextBox && !richTextBox.Selection.IsEmpty)
+        {
+            var range = new TextRange(richTextBox.Selection.Start, richTextBox.Selection.End);
+            if (string.IsNullOrWhiteSpace(range.Text))
+            {
+                SelectionActionPopup.IsOpen = false;
+                return;
+            }
+
+            _selectionTarget = richTextBox;
+            _selectedRichTextRange = range;
+            _selectionText = range.Text;
+            _selectionStart = new TextRange(richTextBox.Document.ContentStart, range.Start).Text.Length;
+            _selectionLength = range.Text.Length;
+            _selectionSourceKey = GetSelectionSourceKey(richTextBox);
+        }
+        else
+        {
+            SelectionActionPopup.IsOpen = false;
+            return;
+        }
+
+        _selectionSegments.Add(new SelectionSegment(_selectionTarget, _selectionSourceKey, _selectionStart, _selectionLength, _selectionText));
+
+        var editableNotes = control is TextBox { IsReadOnly: false };
+        SelectionPasteButton.Visibility = editableNotes ? Visibility.Visible : Visibility.Collapsed;
+        var matching = FindSelectedAnnotations().ToList();
+        SelectionDeleteHighlightButton.Visibility = matching.Any(annotation => annotation.IsHighlighted)
+            ? Visibility.Visible : Visibility.Collapsed;
+        SelectionDeleteNoteButton.Visibility = matching.Any(annotation => !string.IsNullOrWhiteSpace(annotation.Note))
+            ? Visibility.Visible : Visibility.Collapsed;
+        LayoutSelectionActionsOnCurve();
+        CollapseSelectionActionButtons();
+        SelectionActionPopup.PlacementTarget = control;
+        SelectionActionPopup.IsOpen = true;
+    }
+
+    private string GetSelectionSourceKey(Control control)
+    {
+        if (control is TextBox { Tag: StudyBlock block } && _currentStudy is not null)
+        {
+            return $"notes:block:{_currentStudy.Blocks.IndexOf(block)}";
+        }
+
+        if (control.Tag is ExtraStudyPanelState panel)
+        {
+            return $"panel:{panel.Id}";
+        }
+
+        if (ReferenceEquals(control, ScriptureTextView))
+        {
+            return $"scripture:{_scriptureVisibleBookName}:{_scriptureVisibleChapter}";
+        }
+
+        if (ReferenceEquals(control, StrongsDefinitionViewer))
+        {
+            return $"strongs:{StrongsNumberText.Text}";
+        }
+
+        return control.Name;
+    }
+
+    private IEnumerable<TextAnnotationState> FindSelectedAnnotations()
+    {
+        if (_currentStudy is null)
+        {
+            return [];
+        }
+
+        var segments = _selectionSegments.Count > 0
+            ? _selectionSegments
+            : [new SelectionSegment(_selectionTarget!, _selectionSourceKey, _selectionStart, _selectionLength, _selectionText)];
+        return _currentStudy.TextAnnotations.Where(annotation => segments.Any(segment =>
+            annotation.SourceKey == segment.SourceKey
+            && annotation.Start < segment.Start + segment.Length
+            && annotation.Start + annotation.Length > segment.Start));
+    }
+
+    private TextAnnotationState GetOrCreateSelectedAnnotation()
+    {
+        var annotation = FindSelectedAnnotations().FirstOrDefault(annotation =>
+            annotation.Start == _selectionStart && annotation.Length == _selectionLength);
+        if (annotation is not null)
+        {
+            return annotation;
+        }
+
+        annotation = new TextAnnotationState
+        {
+            SourceKey = _selectionSourceKey,
+            Start = _selectionStart,
+            Length = _selectionLength,
+            Quote = _selectionText
+        };
+        _currentStudy!.TextAnnotations.Add(annotation);
+        return annotation;
+    }
+
+    private IReadOnlyList<TextAnnotationState> GetOrCreateSelectedAnnotations()
+    {
+        if (_selectionSegments.Count <= 1)
+        {
+            return [GetOrCreateSelectedAnnotation()];
+        }
+
+        var annotations = new List<TextAnnotationState>();
+        foreach (var segment in _selectionSegments)
+        {
+            var annotation = _currentStudy!.TextAnnotations.FirstOrDefault(item => item.SourceKey == segment.SourceKey
+                && item.Start == segment.Start && item.Length == segment.Length);
+            if (annotation is null)
+            {
+                annotation = new TextAnnotationState
+                {
+                    SourceKey = segment.SourceKey,
+                    Start = segment.Start,
+                    Length = segment.Length,
+                    Quote = segment.Text
+                };
+                _currentStudy.TextAnnotations.Add(annotation);
+            }
+            annotations.Add(annotation);
+        }
+        return annotations;
+    }
+
+    private void SelectionActionButton_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (sender is not Button hovered)
+        {
+            return;
+        }
+
+        AnimateSelectionActionButtons(hovered);
+    }
+
+    private void SelectionActionButton_MouseLeave(object sender, MouseEventArgs e)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            var hovered = GetSelectionActionButtons().FirstOrDefault(button => button.IsMouseOver);
+            AnimateSelectionActionButtons(hovered);
+        }, DispatcherPriority.Input);
+    }
+
+    private void AnimateSelectionActionButtons(Button? hovered)
+    {
+        var ease = new SineEase { EasingMode = EasingMode.EaseOut };
+        var duration = TimeSpan.FromMilliseconds(240);
+        foreach (var layout in GetSelectionActionLayout())
+        {
+            var isHovered = ReferenceEquals(layout.Button, hovered);
+            Panel.SetZIndex(layout.Button, isHovered ? 100 : 1);
+            layout.Button.BeginAnimation(WidthProperty,
+                new DoubleAnimation(layout.Button.ActualWidth, isHovered ? 54 : 38, duration) { EasingFunction = ease });
+            layout.Button.BeginAnimation(HeightProperty,
+                new DoubleAnimation(layout.Button.ActualHeight, isHovered ? 54 : 38, duration) { EasingFunction = ease });
+            layout.Button.BeginAnimation(Canvas.LeftProperty,
+                new DoubleAnimation(Canvas.GetLeft(layout.Button), layout.Left + (isHovered ? -8 : 0), duration) { EasingFunction = ease });
+            layout.Button.BeginAnimation(Canvas.TopProperty,
+                new DoubleAnimation(Canvas.GetTop(layout.Button), layout.Top + (isHovered ? -8 : 0), duration) { EasingFunction = ease });
+        }
+    }
+
+    private IEnumerable<Button> GetSelectionActionButtons()
+    {
+        return new[]
+        {
+            SelectionHighlightButton,
+            SelectionCopyButton,
+            SelectionPasteButton,
+            SelectionAddNoteButton,
+            SelectionDeleteHighlightButton,
+            SelectionDeleteNoteButton
+        }.Where(button => button.Visibility == Visibility.Visible);
+    }
+
+    private List<(Button Button, double Left, double Top)> GetSelectionActionLayout()
+    {
+        var visibleButtons = GetSelectionActionButtons().ToList();
+        var layout = new List<(Button Button, double Left, double Top)>();
+        var curveExtent = Math.Clamp(0.4 + 0.12 * Math.Max(0, visibleButtons.Count - 1), 0.4, 1);
+        UpdateSelectionActionCurveGeometry(curveExtent);
+
+        for (var index = 0; index < visibleButtons.Count; index++)
+        {
+            var t = visibleButtons.Count == 1 ? 0 : curveExtent * index / (visibleButtons.Count - 1);
+            var inverse = 1 - t;
+            var x = inverse * inverse * inverse * 30
+                    + 3 * inverse * inverse * t * 80
+                    + 3 * inverse * t * t * 145
+                    + t * t * t * 175;
+            var y = inverse * inverse * inverse * 35
+                    + 3 * inverse * inverse * t * 35
+                    + 3 * inverse * t * t * 65
+                    + t * t * t * 105;
+            layout.Add((visibleButtons[index], x - 19, y - 19));
+        }
+
+        return layout;
+    }
+
+    private void UpdateSelectionActionCurveGeometry(double extent)
+    {
+        var p0 = new Point(30, 35);
+        var p1 = new Point(80, 35);
+        var p2 = new Point(145, 65);
+        var p3 = new Point(175, 105);
+        var q0 = Lerp(p0, p1, extent);
+        var q1 = Lerp(p1, p2, extent);
+        var q2 = Lerp(p2, p3, extent);
+        var r0 = Lerp(q0, q1, extent);
+        var r1 = Lerp(q1, q2, extent);
+        var end = Lerp(r0, r1, extent);
+        SelectionActionCurve.Data = new PathGeometry([
+            new PathFigure(p0, [new BezierSegment(q0, r0, end, true)], false)
+        ]);
+    }
+
+    private static Point Lerp(Point start, Point end, double amount)
+    {
+        return new Point(start.X + (end.X - start.X) * amount, start.Y + (end.Y - start.Y) * amount);
+    }
+
+    private void LayoutSelectionActionsOnCurve()
+    {
+        foreach (var layout in GetSelectionActionLayout())
+        {
+            layout.Button.BeginAnimation(Canvas.LeftProperty, null);
+            layout.Button.BeginAnimation(Canvas.TopProperty, null);
+            Canvas.SetLeft(layout.Button, layout.Left);
+            Canvas.SetTop(layout.Button, layout.Top);
+        }
+    }
+
+    private void CollapseSelectionActionButtons()
+    {
+        foreach (var button in new[] { SelectionHighlightButton, SelectionCopyButton, SelectionPasteButton,
+                     SelectionAddNoteButton, SelectionDeleteHighlightButton, SelectionDeleteNoteButton })
+        {
+            Panel.SetZIndex(button, 1);
+            button.BeginAnimation(WidthProperty, null);
+            button.BeginAnimation(HeightProperty, null);
+            button.BeginAnimation(Canvas.LeftProperty, null);
+            button.BeginAnimation(Canvas.TopProperty, null);
+            button.Width = 38;
+            button.Height = 38;
+        }
+        LayoutSelectionActionsOnCurve();
+    }
+
+    private void SelectionHighlight_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentStudy is null || _selectionTarget is null)
+        {
+            return;
+        }
+
+        HighlightColorPopup.IsOpen = true;
+    }
+
+    private void HighlightColor_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string color } || _currentStudy is null || _selectionTarget is null)
+        {
+            return;
+        }
+
+        foreach (var annotation in GetOrCreateSelectedAnnotations())
+        {
+            annotation.IsHighlighted = true;
+            annotation.HighlightColor = color;
+        }
+        _suppressSelectionSubmenuClose = true;
+        HighlightColorPopup.IsOpen = false;
+        ApplyCurrentSelectionFormatting();
+        FinishAnnotationChange("Highlight added");
+        _suppressSelectionSubmenuClose = false;
+    }
+
+    private void SelectionActionMenu_MouseLeave(object sender, MouseEventArgs e)
+    {
+        AnimateSelectionActionButtons(null);
+    }
+
+    private void SelectionCopy_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(_selectionText))
+        {
+            Clipboard.SetText(_selectionText);
+            ShowToast("Copied");
+        }
+        CloseSelectionUi();
+    }
+
+    private void SelectionPaste_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectionTarget is TextBox textBox && Clipboard.ContainsText())
+        {
+            var value = Clipboard.GetText();
+            textBox.SelectedText = value;
+            textBox.CaretIndex = _selectionStart + value.Length;
+            QueueWorkspaceSave();
+        }
+        CloseSelectionUi();
+    }
+
+    private void SelectionAddNote_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentStudy is null || _selectionTarget is null)
+        {
+            return;
+        }
+
+        var existing = FindSelectedAnnotations().FirstOrDefault(annotation => !string.IsNullOrWhiteSpace(annotation.Note));
+        _pendingNoteAnnotations = GetOrCreateSelectedAnnotations();
+        AnnotationNoteTextBox.Text = existing?.Note ?? string.Empty;
+        AnnotationNotePopup.IsOpen = true;
+        AnimateAnnotationNoteCard();
+    }
+
+    private void AnimateAnnotationNoteCard()
+    {
+        AnnotationNoteCard.BeginAnimation(OpacityProperty, null);
+        AnnotationNoteCardScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        AnnotationNoteCardScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        AnnotationNoteCardTranslate.BeginAnimation(TranslateTransform.YProperty, null);
+        AnnotationNoteCard.Opacity = 0;
+        AnnotationNoteCardScale.ScaleX = 0.9;
+        AnnotationNoteCardScale.ScaleY = 0.9;
+        AnnotationNoteCardTranslate.Y = -8;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        AnnotationNoteCard.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(170)) { EasingFunction = ease });
+        AnnotationNoteCardScale.BeginAnimation(ScaleTransform.ScaleXProperty,
+            new DoubleAnimation(0.9, 1, TimeSpan.FromMilliseconds(210)) { EasingFunction = ease });
+        AnnotationNoteCardScale.BeginAnimation(ScaleTransform.ScaleYProperty,
+            new DoubleAnimation(0.9, 1, TimeSpan.FromMilliseconds(210)) { EasingFunction = ease });
+        AnnotationNoteCardTranslate.BeginAnimation(TranslateTransform.YProperty,
+            new DoubleAnimation(-8, 0, TimeSpan.FromMilliseconds(210)) { EasingFunction = ease });
+        Dispatcher.BeginInvoke(() =>
+        {
+            AnnotationNoteTextBox.Focus();
+            AnnotationNoteTextBox.CaretIndex = AnnotationNoteTextBox.Text.Length;
+        }, DispatcherPriority.Input);
+    }
+
+    private void AnnotationNoteSave_Click(object sender, RoutedEventArgs e)
+    {
+        var note = AnnotationNoteTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(note))
+        {
+            ShowToast("Write a note first");
+            return;
+        }
+
+        foreach (var annotation in _pendingNoteAnnotations)
+        {
+            annotation.Note = note;
+        }
+        _suppressSelectionSubmenuClose = true;
+        AnnotationNotePopup.IsOpen = false;
+        ApplyCurrentSelectionFormatting();
+        FinishAnnotationChange("Note attached");
+        _suppressSelectionSubmenuClose = false;
+        _pendingNoteAnnotations = [];
+    }
+
+    private void AnnotationNoteCancel_Click(object sender, RoutedEventArgs e)
+    {
+        AnnotationNotePopup.IsOpen = false;
+    }
+
+    private void AnnotationNotePopup_Closed(object? sender, EventArgs e)
+    {
+        foreach (var annotation in _pendingNoteAnnotations.Where(annotation =>
+                     !annotation.IsHighlighted && string.IsNullOrWhiteSpace(annotation.Note)).ToList())
+        {
+            _currentStudy?.TextAnnotations.Remove(annotation);
+        }
+        _pendingNoteAnnotations = [];
+        if (!_isClosingSelectionUi && !_suppressSelectionSubmenuClose)
+        {
+            CloseSelectionUi();
+        }
+    }
+
+    private void SelectionSubmenu_Closed(object? sender, EventArgs e)
+    {
+        if (!_isClosingSelectionUi && !_suppressSelectionSubmenuClose)
+        {
+            CloseSelectionUi();
+        }
+    }
+
+    private void SelectionDeleteHighlight_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var annotation in FindSelectedAnnotations().ToList())
+        {
+            annotation.IsHighlighted = false;
+            RemoveEmptyAnnotation(annotation);
+        }
+        RefreshSelectionFormatting();
+        FinishAnnotationChange("Highlight removed");
+    }
+
+    private void SelectionDeleteNote_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var annotation in FindSelectedAnnotations().ToList())
+        {
+            annotation.Note = string.Empty;
+            RemoveEmptyAnnotation(annotation);
+        }
+        RefreshSelectionFormatting();
+        FinishAnnotationChange("Note deleted");
+    }
+
+    private void RemoveEmptyAnnotation(TextAnnotationState annotation)
+    {
+        if (!annotation.IsHighlighted && string.IsNullOrWhiteSpace(annotation.Note))
+        {
+            _currentStudy?.TextAnnotations.Remove(annotation);
+        }
+    }
+
+    private void ApplyCurrentSelectionFormatting()
+    {
+        if (_selectedRichTextRange is not null)
+        {
+            var annotation = FindSelectedAnnotations().FirstOrDefault(item =>
+                item.Start == _selectionStart && item.Length == _selectionLength);
+            if (annotation is null)
+            {
+                return;
+            }
+            if (annotation.IsHighlighted)
+            {
+                var color = ParseAnnotationColor(annotation.HighlightColor);
+                _selectedRichTextRange.ApplyPropertyValue(TextElement.BackgroundProperty,
+                    new SolidColorBrush(Color.FromArgb(105, color.R, color.G, color.B)));
+            }
+            if (!string.IsNullOrWhiteSpace(annotation.Note))
+            {
+                _selectedRichTextRange.ApplyPropertyValue(Inline.TextDecorationsProperty, TextDecorations.Underline);
+            }
+        }
+        else if (_selectionTarget is TextBox textBox)
+        {
+            foreach (var target in _selectionSegments.Select(segment => segment.Target).OfType<TextBox>().DefaultIfEmpty(textBox).Distinct())
+            {
+                EnsureTextAnnotationAdorner(target).InvalidateVisual();
+            }
+        }
+    }
+
+    private void ApplySavedRichTextAnnotations(RichTextBox viewer)
+    {
+        if (_currentStudy is null)
+        {
+            return;
+        }
+
+        var sourceKey = GetSelectionSourceKey(viewer);
+        var annotations = _currentStudy.TextAnnotations.Where(annotation => annotation.SourceKey == sourceKey).ToList();
+        foreach (var annotation in annotations)
+        {
+            var quote = annotation.Quote.Trim();
+            if (quote.Length == 0)
+            {
+                continue;
+            }
+
+            foreach (var run in viewer.Document.Blocks.SelectMany(FindRuns))
+            {
+                var index = run.Text.IndexOf(quote, StringComparison.Ordinal);
+                if (index < 0)
+                {
+                    continue;
+                }
+
+                var start = run.ContentStart.GetPositionAtOffset(index);
+                var end = start?.GetPositionAtOffset(quote.Length);
+                if (start is null || end is null)
+                {
+                    continue;
+                }
+
+                var range = new TextRange(start, end);
+                if (annotation.IsHighlighted)
+                {
+                    var color = ParseAnnotationColor(annotation.HighlightColor);
+                    range.ApplyPropertyValue(TextElement.BackgroundProperty,
+                        new SolidColorBrush(Color.FromArgb(105, color.R, color.G, color.B)));
+                }
+                if (!string.IsNullOrWhiteSpace(annotation.Note))
+                {
+                    range.ApplyPropertyValue(Inline.TextDecorationsProperty, TextDecorations.Underline);
+                }
+                break;
+            }
+        }
+    }
+
+    private static IEnumerable<Run> FindRuns(Block block)
+    {
+        if (block is Paragraph paragraph)
+        {
+            foreach (var inline in paragraph.Inlines)
+            {
+                foreach (var run in FindRuns(inline))
+                {
+                    yield return run;
+                }
+            }
+        }
+        else if (block is Section section)
+        {
+            foreach (var child in section.Blocks)
+            {
+                foreach (var run in FindRuns(child))
+                {
+                    yield return run;
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<Run> FindRuns(Inline inline)
+    {
+        if (inline is Run run)
+        {
+            yield return run;
+        }
+        else if (inline is Span span)
+        {
+            foreach (var child in span.Inlines)
+            {
+                foreach (var nested in FindRuns(child))
+                {
+                    yield return nested;
+                }
+            }
+        }
+    }
+
+    private Color ParseAnnotationColor(string value)
+    {
+        try
+        {
+            return (Color)ColorConverter.ConvertFromString(value);
+        }
+        catch
+        {
+            return ((SolidColorBrush)GetResourceBrush("Gold")).Color;
+        }
+    }
+
+    private void RefreshSelectionFormatting()
+    {
+        if (_selectedRichTextRange is not null)
+        {
+            _selectedRichTextRange.ApplyPropertyValue(TextElement.BackgroundProperty, Brushes.Transparent);
+            _selectedRichTextRange.ApplyPropertyValue(Inline.TextDecorationsProperty, null);
+            ApplyCurrentSelectionFormatting();
+        }
+        else if (_selectionTarget is TextBox textBox && _textAnnotationAdorners.TryGetValue(textBox, out var adorner))
+        {
+            adorner.InvalidateVisual();
+            foreach (var target in _selectionSegments.Select(segment => segment.Target).OfType<TextBox>())
+            {
+                EnsureTextAnnotationAdorner(target).InvalidateVisual();
+            }
+        }
+    }
+
+    private void FinishAnnotationChange(string toast)
+    {
+        SaveWorkspaceState();
+        CloseSelectionUi();
+        ShowToast(toast);
+    }
+
+    private void CloseSelectionUi()
+    {
+        if (_isClosingSelectionUi)
+        {
+            return;
+        }
+
+        _isClosingSelectionUi = true;
+        try
+        {
+            HighlightColorPopup.IsOpen = false;
+            AnnotationNotePopup.IsOpen = false;
+            SelectionActionPopup.IsOpen = false;
+            _annotationToolTip?.SetCurrentValue(System.Windows.Controls.ToolTip.IsOpenProperty, false);
+            CollapseSelectionActionButtons();
+            ClearMultiBlockSelectionPreview();
+            _selectionSegments.Clear();
+            _selectionTarget = null;
+            _selectedRichTextRange = null;
+            _selectionText = string.Empty;
+            _selectionSourceKey = string.Empty;
+            _selectionStart = 0;
+            _selectionLength = 0;
+            _multiSelectStartTextBox = null;
+            _multiSelectEndTextBox = null;
+            if (_isMultiBlockDragging)
+            {
+                Mouse.Capture(null);
+                _isMultiBlockDragging = false;
+            }
+        }
+        finally
+        {
+            _isClosingSelectionUi = false;
+        }
+    }
+
+    private TextAnnotationAdorner EnsureTextAnnotationAdorner(TextBox textBox)
+    {
+        if (_textAnnotationAdorners.TryGetValue(textBox, out var existing))
+        {
+            return existing;
+        }
+        var layer = AdornerLayer.GetAdornerLayer(textBox);
+        var adorner = new TextAnnotationAdorner(textBox, () =>
+        {
+            var sourceKey = GetSelectionSourceKey(textBox);
+            var saved = _currentStudy?.TextAnnotations.Where(annotation => annotation.SourceKey == sourceKey) ?? [];
+            return saved.Concat(_multiBlockSelectionPreview.Where(annotation => annotation.SourceKey == sourceKey)).ToList();
+        });
+        layer?.Add(adorner);
+        _textAnnotationAdorners[textBox] = adorner;
+        textBox.TextChanged += (_, _) => adorner.InvalidateVisual();
+        textBox.SizeChanged += (_, _) => adorner.InvalidateVisual();
+        return adorner;
+    }
+
+    private void SelectableText_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_currentStudy is null || sender is not Control control)
+        {
+            return;
+        }
+        var offset = control switch
+        {
+            TextBox textBox => textBox.GetCharacterIndexFromPoint(e.GetPosition(textBox), true),
+            RichTextBox rich => new TextRange(rich.Document.ContentStart, rich.GetPositionFromPoint(e.GetPosition(rich), true)).Text.Length,
+            _ => -1
+        };
+        var annotation = _currentStudy.TextAnnotations.FirstOrDefault(item => item.SourceKey == GetSelectionSourceKey(control)
+            && offset >= item.Start && offset <= item.Start + item.Length && !string.IsNullOrWhiteSpace(item.Note));
+        if (annotation is null)
+        {
+            if (_annotationToolTip is not null) _annotationToolTip.IsOpen = false;
+            return;
+        }
+        _annotationToolTip ??= new ToolTip { Placement = PlacementMode.Mouse, StaysOpen = false };
+        _annotationToolTip.Content = annotation.Note;
+        _annotationToolTip.IsOpen = true;
     }
 
     private void AddExtraScripturePanel(string bookName, int chapter, int? selectedVerse, string subtitle)
@@ -5918,7 +7194,7 @@ public partial class MainWindow : Window
             document.Blocks.Add(new Paragraph(new Run("This chapter is not available in the current scripture data.")));
         }
 
-        return new RichTextBox(document)
+        var viewer = new RichTextBox(document)
         {
             IsReadOnly = true,
             IsDocumentEnabled = true,
@@ -5929,8 +7205,14 @@ public partial class MainWindow : Window
             SelectionOpacity = 0.45,
             Padding = new Thickness(14),
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Tag = state
         };
+        viewer.PreviewMouseLeftButtonUp += SelectableText_PreviewMouseLeftButtonUp;
+        viewer.PreviewMouseMove += SelectableText_PreviewMouseMove;
+        viewer.SelectionChanged += SelectableText_SelectionChanged;
+        viewer.Loaded += (_, _) => ApplySavedRichTextAnnotations(viewer);
+        return viewer;
     }
 
     private UIElement CreateExtraNotesContent(ExtraStudyPanelState state)
@@ -5952,6 +7234,10 @@ public partial class MainWindow : Window
             Tag = state
         };
         textBox.TextChanged += ExtraNotesTextBox_TextChanged;
+        textBox.PreviewMouseLeftButtonUp += SelectableText_PreviewMouseLeftButtonUp;
+        textBox.PreviewMouseMove += SelectableText_PreviewMouseMove;
+        textBox.SelectionChanged += SelectableText_SelectionChanged;
+        textBox.Loaded += (_, _) => EnsureTextAnnotationAdorner(textBox).InvalidateVisual();
         return textBox;
     }
 
@@ -6217,6 +7503,8 @@ public partial class MainWindow : Window
 
             StrongsDefinitionDocument.Blocks.Add(CreateDefinitionParagraph(line));
         }
+
+        ApplySavedRichTextAnnotations(StrongsDefinitionViewer);
     }
 
     private Paragraph CreateDefinitionParagraph(DefinitionLine line)
@@ -7217,6 +8505,7 @@ public partial class MainWindow : Window
                 transform.X = targetX;
                 transform.Y = targetY;
                 UpdateEditorAvoidanceForPanels(animate: false);
+                SaveCurrentPanelGeometry(kind, flush: true);
             };
             transform.BeginAnimation(TranslateTransform.YProperty, yAnimation);
         }
@@ -7224,6 +8513,7 @@ public partial class MainWindow : Window
         {
             transform.X = targetX;
             transform.Y = targetY;
+            SaveCurrentPanelGeometry(kind, flush: true);
         }
 
         if (kind == MovablePanelKind.Scripture)
@@ -7235,7 +8525,6 @@ public partial class MainWindow : Window
             _strongsPanelPreset = preset;
         }
 
-        Dispatcher.BeginInvoke(() => SaveCurrentPanelGeometry(kind, flush: true), DispatcherPriority.Render);
         Dispatcher.BeginInvoke(() => UpdateEditorAvoidanceForPanels(animate), DispatcherPriority.Render);
     }
 
@@ -7322,43 +8611,24 @@ public partial class MainWindow : Window
 
     private bool ShouldResetStudyPanelGeometry(WorkspaceItem study)
     {
-        if (StudyPanel.ActualWidth <= 1 || StudyPanel.ActualHeight <= 1)
-        {
-            return false;
-        }
-
         if (study.EditorPanelGeometry is null || study.ScripturePanelGeometry is null)
         {
             return true;
         }
 
-        var editor = study.EditorPanelGeometry;
-        var scripture = study.ScripturePanelGeometry;
-        var width = StudyPanel.ActualWidth;
-        var height = StudyPanel.ActualHeight;
-        var editorLooksMaxed = LooksLikeLegacyMaxedPanel(editor, width, height);
-        var scriptureLooksMaxed = LooksLikeLegacyMaxedPanel(scripture, width, height);
-        var editorLooksTiny = LooksLikeTinyPanel(editor, width, height);
-        var scriptureLooksFullscreen = LooksLikeLegacyMaxedPanel(scripture, width, height);
-        var scriptureCoversEditorDefault = scripture.X <= 24 && scripture.Width >= width * 0.74;
-
-        return (editorLooksMaxed && scriptureLooksMaxed)
-            || (editorLooksTiny && scriptureLooksFullscreen)
-            || (editorLooksTiny && scriptureCoversEditorDefault);
+        return !IsValidSavedPanelGeometry(study.EditorPanelGeometry)
+               || !IsValidSavedPanelGeometry(study.ScripturePanelGeometry)
+               || study.StrongsPanelGeometry is not null && !IsValidSavedPanelGeometry(study.StrongsPanelGeometry);
     }
 
-    private static bool LooksLikeLegacyMaxedPanel(PanelGeometryState geometry, double width, double height)
+    private static bool IsValidSavedPanelGeometry(PanelGeometryState geometry)
     {
-        return geometry.X <= 24
-            && geometry.Y <= 24
-            && geometry.Width >= width * 0.82
-            && geometry.Height >= height * 0.82;
-    }
-
-    private static bool LooksLikeTinyPanel(PanelGeometryState geometry, double width, double height)
-    {
-        return geometry.Width <= width * 0.28
-            || geometry.Height <= height * 0.32;
+        return double.IsFinite(geometry.X)
+               && double.IsFinite(geometry.Y)
+               && double.IsFinite(geometry.Width)
+               && double.IsFinite(geometry.Height)
+               && geometry.Width > 0
+               && geometry.Height > 0;
     }
 
     private void ApplyDefaultStudyPanelGeometry(WorkspaceItem study, bool save)
@@ -7775,8 +9045,9 @@ public partial class MainWindow : Window
     private void StudyPanel_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         PositionPanelPresetTargets();
-        ClampAllPanelsToStudyArea(save: !_isInitializing);
-        ClampExtraPanelsToStudyArea(save: !_isInitializing);
+        var saveGeometry = !_isInitializing && !_isRestoringStudyPanelGeometry;
+        ClampAllPanelsToStudyArea(save: saveGeometry);
+        ClampExtraPanelsToStudyArea(save: saveGeometry);
         if (_draggingPanelKind is null)
         {
             UpdateEditorAvoidanceForPanels(animate: false);
@@ -8177,6 +9448,8 @@ public sealed class WorkspaceItem : INotifyPropertyChanged
 
     public ObservableCollection<ExtraStudyPanelState> ExtraPanels { get; } = new();
 
+    public ObservableCollection<TextAnnotationState> TextAnnotations { get; } = new();
+
     public int? PassageStartChapter
     {
         get => _passageStartChapter;
@@ -8343,6 +9616,7 @@ public enum BreadcrumbTarget
     ReminderSettings,
     Settings,
     ColorThemeSettings,
+    LocalAiSettings,
     WorkspaceItem,
     Study
 }
@@ -8714,6 +9988,21 @@ public sealed class WorkspaceState
     public ReminderSettingsState ReminderSettings { get; set; } = new();
 
     public ColorSettingsState ColorSettings { get; set; } = new();
+
+    public WindowPlacementState? WindowPlacement { get; set; }
+}
+
+public sealed class WindowPlacementState
+{
+    public double Left { get; set; }
+
+    public double Top { get; set; }
+
+    public double Width { get; set; }
+
+    public double Height { get; set; }
+
+    public bool IsMaximized { get; set; }
 }
 
 public sealed class ColorSettingsState
@@ -8790,6 +10079,8 @@ public sealed class WorkspaceItemState
 
     public List<ExtraStudyPanelState> ExtraPanels { get; set; } = new();
 
+    public List<TextAnnotationState> TextAnnotations { get; set; } = new();
+
     public List<WorkspaceItemState> Children { get; set; } = new();
 
     public List<StudyBlockState> Blocks { get; set; } = new();
@@ -8802,6 +10093,25 @@ public sealed class StudyBlockState
     public string Text { get; set; } = string.Empty;
 
     public bool IsChecked { get; set; }
+}
+
+public sealed class TextAnnotationState
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+
+    public string SourceKey { get; set; } = string.Empty;
+
+    public int Start { get; set; }
+
+    public int Length { get; set; }
+
+    public string Quote { get; set; } = string.Empty;
+
+    public bool IsHighlighted { get; set; }
+
+    public string HighlightColor { get; set; } = "#F4C95D";
+
+    public string Note { get; set; } = string.Empty;
 }
 
 public sealed class PanelGeometryState
@@ -8840,6 +10150,102 @@ public sealed class ExtraStudyPanelState
     public string NotesText { get; set; } = string.Empty;
 }
 
+public sealed class TextAnnotationAdorner : Adorner
+{
+    private readonly TextBox _textBox;
+    private readonly Func<IReadOnlyList<TextAnnotationState>> _annotations;
+
+    public TextAnnotationAdorner(TextBox textBox, Func<IReadOnlyList<TextAnnotationState>> annotations)
+        : base(textBox)
+    {
+        _textBox = textBox;
+        _annotations = annotations;
+        IsHitTestVisible = false;
+        ClipToBounds = true;
+    }
+
+    protected override void OnRender(DrawingContext drawingContext)
+    {
+        base.OnRender(drawingContext);
+        if (string.IsNullOrEmpty(_textBox.Text))
+        {
+            return;
+        }
+
+        var underlineBrush = new SolidColorBrush(Color.FromRgb(188, 108, 37));
+        underlineBrush.Freeze();
+        var underlinePen = new Pen(underlineBrush, 2.1);
+        underlinePen.Freeze();
+
+        foreach (var annotation in _annotations())
+        {
+            var start = Math.Clamp(annotation.Start, 0, _textBox.Text.Length);
+            var end = Math.Clamp(annotation.Start + annotation.Length, start, _textBox.Text.Length);
+            if (end <= start)
+            {
+                continue;
+            }
+
+            Rect? lineRect = null;
+            for (var index = start; index < end; index++)
+            {
+                var leading = _textBox.GetRectFromCharacterIndex(index, true);
+                var trailing = _textBox.GetRectFromCharacterIndex(index, false);
+                if (leading.IsEmpty || trailing.IsEmpty)
+                {
+                    continue;
+                }
+
+                var charRect = new Rect(leading.X, leading.Y, Math.Max(2, trailing.X - leading.X), Math.Max(leading.Height, trailing.Height));
+                if (lineRect is { } current && Math.Abs(current.Y - charRect.Y) < 1.5)
+                {
+                    lineRect = Rect.Union(current, charRect);
+                }
+                else
+                {
+                    DrawAnnotationLine(drawingContext, lineRect, annotation, CreateHighlightBrush(annotation), underlinePen);
+                    lineRect = charRect;
+                }
+            }
+            DrawAnnotationLine(drawingContext, lineRect, annotation, CreateHighlightBrush(annotation), underlinePen);
+        }
+    }
+
+    private static Brush CreateHighlightBrush(TextAnnotationState annotation)
+    {
+        try
+        {
+            var color = (Color)ColorConverter.ConvertFromString(annotation.HighlightColor);
+            var brush = new SolidColorBrush(Color.FromArgb(76, color.R, color.G, color.B));
+            brush.Freeze();
+            return brush;
+        }
+        catch
+        {
+            return new SolidColorBrush(Color.FromArgb(76, 244, 201, 93));
+        }
+    }
+
+    private static void DrawAnnotationLine(DrawingContext drawingContext, Rect? lineRect, TextAnnotationState annotation,
+        Brush highlightBrush, Pen underlinePen)
+    {
+        if (lineRect is not { } rect || rect.IsEmpty)
+        {
+            return;
+        }
+        if (annotation.IsHighlighted)
+        {
+            drawingContext.DrawRoundedRectangle(highlightBrush, null,
+                new Rect(rect.X, rect.Y + 1, rect.Width, Math.Max(2, rect.Height - 2)), 3, 3);
+        }
+        if (!string.IsNullOrWhiteSpace(annotation.Note))
+        {
+            var y = rect.Bottom - 1;
+            drawingContext.DrawLine(underlinePen, new Point(rect.Left, y), new Point(rect.Right, y));
+        }
+    }
+}
+
 public sealed record ExtraPanelRuntime(
     ExtraStudyPanelState State,
     Border Root,
@@ -8871,6 +10277,8 @@ public sealed class ScheduledNotificationState
 
 public sealed class ReminderSettingsState
 {
+    public string AiModel { get; set; } = "llama3.2:latest";
+
     public bool OverviewEnabled { get; set; } = true;
 
     public string OverviewPrompt { get; set; } = string.Empty;
@@ -9149,6 +10557,8 @@ public sealed record EndStudySessionApiRequest(
     string StudyName,
     string PassageReference,
     string ScriptureText,
+    string NotesText,
+    string AiModel,
     bool OverviewEnabled,
     string OverviewPrompt,
     bool RemindersEnabled,
@@ -9163,6 +10573,13 @@ public sealed record StudyReminderApiRequest(
 public sealed record EndStudySessionApiResponse(
     string Overview,
     List<NotificationDispatchApiResult> Notifications);
+
+public sealed record OllamaStatusApiResponse(
+    bool Running,
+    string? ExecutablePath,
+    string ConfiguredModel,
+    List<string> Models,
+    string? Error);
 
 public sealed record CancelNotificationsApiRequest(
     List<string> SequenceIds);
