@@ -1,6 +1,7 @@
 <Window x:Class="Bible_Study_App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
         xmlns:local="clr-namespace:Bible_Study_App"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -28,6 +29,111 @@
         <SolidColorBrush x:Key="Violet" Color="#A98467" />
         <Geometry x:Key="ChevronLeftIcon">M 10,2 L 4,8 L 10,14</Geometry>
         <Geometry x:Key="ChevronRightIcon">M 4,2 L 10,8 L 4,14</Geometry>
+
+        <!-- Shared floating-surface tokens. The note editor is the visual source of truth. -->
+        <sys:Double x:Key="FloatingSurfaceHiddenOpacity">0</sys:Double>
+        <sys:Double x:Key="FloatingSurfaceHiddenScale">0.9</sys:Double>
+        <sys:Double x:Key="FloatingSurfaceHiddenOffset">-8</sys:Double>
+        <Duration x:Key="FloatingSurfaceFadeDuration">0:0:0.170</Duration>
+        <Duration x:Key="FloatingSurfaceMotionDuration">0:0:0.210</Duration>
+        <CubicEase x:Key="FloatingSurfaceEntranceEase" EasingMode="EaseOut" />
+        <CubicEase x:Key="FloatingSurfaceExitEase" EasingMode="EaseIn" />
+        <CornerRadius x:Key="NoteSurfaceCornerRadius">24,24,24,7</CornerRadius>
+        <CornerRadius x:Key="CompactSurfaceCornerRadius">12,12,12,5</CornerRadius>
+        <Thickness x:Key="NoteSurfacePadding">16</Thickness>
+        <Thickness x:Key="CompactSurfacePadding">10,7</Thickness>
+
+        <Style x:Key="NoteSurfaceStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource AppBackground}" />
+            <Setter Property="CornerRadius" Value="{StaticResource NoteSurfaceCornerRadius}" />
+            <Setter Property="Padding" Value="{StaticResource NoteSurfacePadding}" />
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="#000000" BlurRadius="22" ShadowDepth="6" Opacity="0.44" />
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="NotePaneToolTipStyle" TargetType="ToolTip">
+            <Setter Property="Placement" Value="Mouse" />
+            <Setter Property="HorizontalOffset" Value="8" />
+            <Setter Property="VerticalOffset" Value="14" />
+            <Setter Property="MaxWidth" Value="280" />
+            <Setter Property="Padding" Value="{StaticResource CompactSurfacePadding}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="HasDropShadow" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToolTip">
+                        <Border x:Name="TooltipSurface" Style="{StaticResource NoteSurfaceStyle}"
+                                CornerRadius="{StaticResource CompactSurfaceCornerRadius}"
+                                Padding="{TemplateBinding Padding}"
+                                Opacity="{StaticResource FloatingSurfaceHiddenOpacity}"
+                                RenderTransformOrigin="0.5,0">
+                            <Border.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform ScaleX="{StaticResource FloatingSurfaceHiddenScale}"
+                                                    ScaleY="{StaticResource FloatingSurfaceHiddenScale}" />
+                                    <TranslateTransform Y="{StaticResource FloatingSurfaceHiddenOffset}" />
+                                </TransformGroup>
+                            </Border.RenderTransform>
+                            <TextBlock Text="{TemplateBinding Content}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsOpen" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="TooltipSurface" Storyboard.TargetProperty="Opacity"
+                                                From="{StaticResource FloatingSurfaceHiddenOpacity}" To="1"
+                                                Duration="{StaticResource FloatingSurfaceFadeDuration}"
+                                                EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="TooltipSurface" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"
+                                                From="{StaticResource FloatingSurfaceHiddenScale}" To="1"
+                                                Duration="{StaticResource FloatingSurfaceMotionDuration}"
+                                                EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="TooltipSurface" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"
+                                                From="{StaticResource FloatingSurfaceHiddenScale}" To="1"
+                                                Duration="{StaticResource FloatingSurfaceMotionDuration}"
+                                                EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="TooltipSurface" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.Y)"
+                                                From="{StaticResource FloatingSurfaceHiddenOffset}" To="0"
+                                                Duration="{StaticResource FloatingSurfaceMotionDuration}"
+                                                EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="TooltipSurface" Storyboard.TargetProperty="Opacity"
+                                                To="{StaticResource FloatingSurfaceHiddenOpacity}" Duration="0:0:0.090"
+                                                EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="TooltipSurface" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"
+                                                To="{StaticResource FloatingSurfaceHiddenScale}" Duration="0:0:0.090"
+                                                EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="TooltipSurface" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"
+                                                To="{StaticResource FloatingSurfaceHiddenScale}" Duration="0:0:0.090"
+                                                EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="TooltipSurface" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.Y)"
+                                                To="{StaticResource FloatingSurfaceHiddenOffset}" Duration="0:0:0.090"
+                                                EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ToolTip" BasedOn="{StaticResource NotePaneToolTipStyle}" />
 
         <Style x:Key="PanelResizeThumbStyle" TargetType="Thumb">
             <Setter Property="Background" Value="Transparent" />
@@ -3818,22 +3924,20 @@
                StaysOpen="False"
                Closed="AnnotationNotePopup_Closed">
             <Border x:Name="AnnotationNoteCard"
+                    Style="{StaticResource NoteSurfaceStyle}"
                     Width="340"
-                    Background="{DynamicResource AppBackground}"
-                    CornerRadius="24,24,24,7"
-                    Padding="16"
                     Margin="8"
-                    Opacity="0"
+                    Opacity="{StaticResource FloatingSurfaceHiddenOpacity}"
                     RenderTransformOrigin="0.5,0">
                 <Border.RenderTransform>
                     <TransformGroup>
-                        <ScaleTransform x:Name="AnnotationNoteCardScale" ScaleX="0.9" ScaleY="0.9" />
-                        <TranslateTransform x:Name="AnnotationNoteCardTranslate" Y="-8" />
+                        <ScaleTransform x:Name="AnnotationNoteCardScale"
+                                        ScaleX="{StaticResource FloatingSurfaceHiddenScale}"
+                                        ScaleY="{StaticResource FloatingSurfaceHiddenScale}" />
+                        <TranslateTransform x:Name="AnnotationNoteCardTranslate"
+                                            Y="{StaticResource FloatingSurfaceHiddenOffset}" />
                     </TransformGroup>
                 </Border.RenderTransform>
-                <Border.Effect>
-                    <DropShadowEffect Color="#000000" BlurRadius="22" ShadowDepth="6" Opacity="0.44" />
-                </Border.Effect>
                 <StackPanel>
                     <TextBlock Text="Note for this text"
                                Foreground="{DynamicResource TextPrimary}"
@@ -3877,6 +3981,96 @@
                                 HorizontalContentAlignment="Center"
                                 Content="Save note"
                                 Click="AnnotationNoteSave_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Popup>
+
+        <Popup x:Name="SavedNotePopup"
+               Placement="MousePoint"
+               HorizontalOffset="10"
+               VerticalOffset="14"
+               AllowsTransparency="True"
+               StaysOpen="False"
+               Closed="SavedNotePopup_Closed">
+            <Border x:Name="SavedNoteCard"
+                    Style="{StaticResource NoteSurfaceStyle}"
+                    Width="340"
+                    Margin="8"
+                    Opacity="{StaticResource FloatingSurfaceHiddenOpacity}"
+                    RenderTransformOrigin="0.5,0"
+                    MouseEnter="SavedNoteCard_MouseEnter"
+                    MouseLeave="SavedNoteCard_MouseLeave">
+                <Border.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="SavedNoteCardScale"
+                                        ScaleX="{StaticResource FloatingSurfaceHiddenScale}"
+                                        ScaleY="{StaticResource FloatingSurfaceHiddenScale}" />
+                        <TranslateTransform x:Name="SavedNoteCardTranslate"
+                                            Y="{StaticResource FloatingSurfaceHiddenOffset}" />
+                    </TransformGroup>
+                </Border.RenderTransform>
+                <StackPanel>
+                    <TextBlock Text="Note for this text"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="17"
+                               FontWeight="Black"
+                               Margin="4,0,4,10" />
+                    <Border Background="{DynamicResource PanelBackground}"
+                            CornerRadius="16"
+                            Padding="12">
+                        <TextBox x:Name="SavedNoteTextBox"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 MinHeight="92"
+                                 MaxHeight="150"
+                                 IsReadOnly="True"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 Foreground="{DynamicResource TextPrimary}"
+                                 CaretBrush="{DynamicResource Mint}"
+                                 FontSize="14"
+                                 Padding="0"
+                                 VerticalScrollBarVisibility="Auto">
+                            <TextBox.Template>
+                                <ControlTemplate TargetType="TextBox">
+                                    <ScrollViewer x:Name="PART_ContentHost" />
+                                </ControlTemplate>
+                            </TextBox.Template>
+                        </TextBox>
+                    </Border>
+                    <StackPanel x:Name="SavedNoteViewActions"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                Margin="0,12,0,0">
+                        <Button Style="{StaticResource SelectionActionButtonStyle}"
+                                Width="82" Height="38" Content="Delete" Padding="0"
+                                HorizontalContentAlignment="Center"
+                                Click="SavedNoteDelete_Click" />
+                        <Button Style="{StaticResource SelectionActionButtonStyle}"
+                                Width="82" Height="38" Margin="8,0,0,0"
+                                Background="{DynamicResource Mint}"
+                                Foreground="{DynamicResource AppBackground}"
+                                Content="Edit" Padding="0"
+                                HorizontalContentAlignment="Center"
+                                Click="SavedNoteEdit_Click" />
+                    </StackPanel>
+                    <StackPanel x:Name="SavedNoteEditActions"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                Margin="0,12,0,0"
+                                Visibility="Collapsed">
+                        <Button Style="{StaticResource SelectionActionButtonStyle}"
+                                Width="82" Height="38" Content="Cancel" Padding="0"
+                                HorizontalContentAlignment="Center"
+                                Click="SavedNoteEditCancel_Click" />
+                        <Button Style="{StaticResource SelectionActionButtonStyle}"
+                                Width="100" Height="38" Margin="8,0,0,0"
+                                Background="{DynamicResource Mint}"
+                                Foreground="{DynamicResource AppBackground}"
+                                Content="Save note" Padding="0"
+                                HorizontalContentAlignment="Center"
+                                Click="SavedNoteSave_Click" />
                     </StackPanel>
                 </StackPanel>
             </Border>

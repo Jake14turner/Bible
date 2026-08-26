@@ -215,7 +215,10 @@ public partial class MainWindow : Window
     private int _selectionLength;
     private string _selectionText = string.Empty;
     private TextRange? _selectedRichTextRange;
-    private ToolTip? _annotationToolTip;
+    private readonly DispatcherTimer _savedNoteCloseTimer;
+    private TextAnnotationState? _savedNoteAnnotation;
+    private Control? _savedNoteTarget;
+    private bool _isEditingSavedNote;
     private readonly List<SelectionSegment> _selectionSegments = new();
     private readonly List<TextAnnotationState> _multiBlockSelectionPreview = new();
     private TextBox? _multiSelectStartTextBox;
@@ -234,6 +237,18 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        _savedNoteCloseTimer = new DispatcherTimer(DispatcherPriority.Input)
+        {
+            Interval = TimeSpan.FromMilliseconds(260)
+        };
+        _savedNoteCloseTimer.Tick += (_, _) =>
+        {
+            _savedNoteCloseTimer.Stop();
+            if (!_isEditingSavedNote && !SavedNoteCard.IsMouseOver)
+            {
+                SavedNotePopup.IsOpen = false;
+            }
+        };
         SourceInitialized += (_, _) => UpdateNativeTitleBarColors();
         Deactivated += (_, _) => CloseSelectionUi();
         Application.Current.Exit += (_, _) => SaveWorkspaceState();
@@ -1946,6 +1961,7 @@ public partial class MainWindow : Window
             {
                 ApplyStudyPanelGeometry(study);
                 RenderExtraStudyPanels();
+                RefreshVisibleAnnotationRendering();
             }
             finally
             {
@@ -6034,7 +6050,8 @@ public partial class MainWindow : Window
         var originalSource = e.OriginalSource as DependencyObject;
         if (IsDescendantOf(originalSource, SelectionActionMenuRoot)
             || IsDescendantOf(originalSource, HighlightColorCard)
-            || IsDescendantOf(originalSource, AnnotationNoteCard))
+            || IsDescendantOf(originalSource, AnnotationNoteCard)
+            || IsDescendantOf(originalSource, SavedNoteCard))
         {
             return;
         }
@@ -6252,8 +6269,35 @@ public partial class MainWindow : Window
     {
         if (sender is TextBox textBox)
         {
-            EnsureTextAnnotationAdorner(textBox).InvalidateVisual();
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (textBox.IsLoaded)
+                {
+                    EnsureTextAnnotationAdorner(textBox).InvalidateVisual();
+                }
+            }, DispatcherPriority.Render);
         }
+    }
+
+    private void RefreshVisibleAnnotationRendering()
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            StudyBlockItems.UpdateLayout();
+            foreach (var textBox in FindDescendants<TextBox>(StudyBlockItems))
+            {
+                EnsureTextAnnotationAdorner(textBox).InvalidateVisual();
+            }
+
+            if (ScriptureTextView.IsVisible)
+            {
+                ApplySavedRichTextAnnotations(ScriptureTextView);
+            }
+            if (StrongsDefinitionViewer.IsVisible)
+            {
+                ApplySavedRichTextAnnotations(StrongsDefinitionViewer);
+            }
+        }, DispatcherPriority.Render);
     }
 
     private void ShowSelectionActions(Control? control)
@@ -6594,23 +6638,28 @@ public partial class MainWindow : Window
 
     private void AnimateAnnotationNoteCard()
     {
+        var hiddenOpacity = (double)FindResource("FloatingSurfaceHiddenOpacity");
+        var hiddenScale = (double)FindResource("FloatingSurfaceHiddenScale");
+        var hiddenOffset = (double)FindResource("FloatingSurfaceHiddenOffset");
+        var fadeDuration = (Duration)FindResource("FloatingSurfaceFadeDuration");
+        var motionDuration = (Duration)FindResource("FloatingSurfaceMotionDuration");
+        var ease = (IEasingFunction)FindResource("FloatingSurfaceEntranceEase");
         AnnotationNoteCard.BeginAnimation(OpacityProperty, null);
         AnnotationNoteCardScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
         AnnotationNoteCardScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
         AnnotationNoteCardTranslate.BeginAnimation(TranslateTransform.YProperty, null);
-        AnnotationNoteCard.Opacity = 0;
-        AnnotationNoteCardScale.ScaleX = 0.9;
-        AnnotationNoteCardScale.ScaleY = 0.9;
-        AnnotationNoteCardTranslate.Y = -8;
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        AnnotationNoteCard.Opacity = hiddenOpacity;
+        AnnotationNoteCardScale.ScaleX = hiddenScale;
+        AnnotationNoteCardScale.ScaleY = hiddenScale;
+        AnnotationNoteCardTranslate.Y = hiddenOffset;
         AnnotationNoteCard.BeginAnimation(OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(170)) { EasingFunction = ease });
+            new DoubleAnimation(hiddenOpacity, 1, fadeDuration) { EasingFunction = ease });
         AnnotationNoteCardScale.BeginAnimation(ScaleTransform.ScaleXProperty,
-            new DoubleAnimation(0.9, 1, TimeSpan.FromMilliseconds(210)) { EasingFunction = ease });
+            new DoubleAnimation(hiddenScale, 1, motionDuration) { EasingFunction = ease });
         AnnotationNoteCardScale.BeginAnimation(ScaleTransform.ScaleYProperty,
-            new DoubleAnimation(0.9, 1, TimeSpan.FromMilliseconds(210)) { EasingFunction = ease });
+            new DoubleAnimation(hiddenScale, 1, motionDuration) { EasingFunction = ease });
         AnnotationNoteCardTranslate.BeginAnimation(TranslateTransform.YProperty,
-            new DoubleAnimation(-8, 0, TimeSpan.FromMilliseconds(210)) { EasingFunction = ease });
+            new DoubleAnimation(hiddenOffset, 0, motionDuration) { EasingFunction = ease });
         Dispatcher.BeginInvoke(() =>
         {
             AnnotationNoteTextBox.Focus();
@@ -6737,41 +6786,69 @@ public partial class MainWindow : Window
         var annotations = _currentStudy.TextAnnotations.Where(annotation => annotation.SourceKey == sourceKey).ToList();
         foreach (var annotation in annotations)
         {
-            var quote = annotation.Quote.Trim();
-            if (quote.Length == 0)
+            var start = GetTextPointerAtTextOffset(viewer.Document, annotation.Start);
+            var end = GetTextPointerAtTextOffset(viewer.Document, annotation.Start + annotation.Length);
+            if (start is null || end is null || start.CompareTo(end) >= 0)
             {
                 continue;
             }
 
-            foreach (var run in viewer.Document.Blocks.SelectMany(FindRuns))
+            var range = new TextRange(start, end);
+            if (annotation.IsHighlighted)
             {
-                var index = run.Text.IndexOf(quote, StringComparison.Ordinal);
-                if (index < 0)
-                {
-                    continue;
-                }
-
-                var start = run.ContentStart.GetPositionAtOffset(index);
-                var end = start?.GetPositionAtOffset(quote.Length);
-                if (start is null || end is null)
-                {
-                    continue;
-                }
-
-                var range = new TextRange(start, end);
-                if (annotation.IsHighlighted)
-                {
-                    var color = ParseAnnotationColor(annotation.HighlightColor);
-                    range.ApplyPropertyValue(TextElement.BackgroundProperty,
-                        new SolidColorBrush(Color.FromArgb(105, color.R, color.G, color.B)));
-                }
-                if (!string.IsNullOrWhiteSpace(annotation.Note))
-                {
-                    range.ApplyPropertyValue(Inline.TextDecorationsProperty, TextDecorations.Underline);
-                }
-                break;
+                var color = ParseAnnotationColor(annotation.HighlightColor);
+                range.ApplyPropertyValue(TextElement.BackgroundProperty,
+                    new SolidColorBrush(Color.FromArgb(105, color.R, color.G, color.B)));
+            }
+            if (!string.IsNullOrWhiteSpace(annotation.Note))
+            {
+                range.ApplyPropertyValue(Inline.TextDecorationsProperty, TextDecorations.Underline);
             }
         }
+    }
+
+    private static TextPointer? GetTextPointerAtTextOffset(FlowDocument document, int textOffset)
+    {
+        var documentStart = document.ContentStart;
+        var documentEnd = document.ContentEnd;
+        var totalTextLength = new TextRange(documentStart, documentEnd).Text.Length;
+        if (textOffset < 0 || textOffset > totalTextLength)
+        {
+            return null;
+        }
+
+        // TextPointer offsets count formatting symbols as well as visible characters.
+        // Binary-search those symbols using TextRange.Text so persisted character offsets
+        // continue to map correctly across runs, line breaks, and paragraphs.
+        var low = 0;
+        var high = documentStart.GetOffsetToPosition(documentEnd);
+        TextPointer? match = textOffset == 0 ? documentStart : null;
+        while (low <= high)
+        {
+            var middle = low + ((high - low) / 2);
+            var candidate = documentStart.GetPositionAtOffset(middle);
+            if (candidate is null)
+            {
+                high = middle - 1;
+                continue;
+            }
+
+            var candidateTextLength = new TextRange(documentStart, candidate).Text.Length;
+            if (candidateTextLength < textOffset)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                if (candidateTextLength == textOffset)
+                {
+                    match = candidate;
+                }
+                high = middle - 1;
+            }
+        }
+
+        return match;
     }
 
     private static IEnumerable<Run> FindRuns(Block block)
@@ -6866,7 +6943,7 @@ public partial class MainWindow : Window
             HighlightColorPopup.IsOpen = false;
             AnnotationNotePopup.IsOpen = false;
             SelectionActionPopup.IsOpen = false;
-            _annotationToolTip?.SetCurrentValue(System.Windows.Controls.ToolTip.IsOpenProperty, false);
+            SavedNotePopup.IsOpen = false;
             CollapseSelectionActionButtons();
             ClearMultiBlockSelectionPreview();
             _selectionSegments.Clear();
@@ -6926,12 +7003,157 @@ public partial class MainWindow : Window
             && offset >= item.Start && offset <= item.Start + item.Length && !string.IsNullOrWhiteSpace(item.Note));
         if (annotation is null)
         {
-            if (_annotationToolTip is not null) _annotationToolTip.IsOpen = false;
+            ScheduleSavedNoteClose();
             return;
         }
-        _annotationToolTip ??= new ToolTip { Placement = PlacementMode.Mouse, StaysOpen = false };
-        _annotationToolTip.Content = annotation.Note;
-        _annotationToolTip.IsOpen = true;
+        _savedNoteCloseTimer.Stop();
+        if (SavedNotePopup.IsOpen && ReferenceEquals(annotation, _savedNoteAnnotation))
+        {
+            return;
+        }
+
+        _savedNoteAnnotation = annotation;
+        _savedNoteTarget = control;
+        _isEditingSavedNote = false;
+        SavedNoteTextBox.Text = annotation.Note;
+        SetSavedNoteEditMode(false);
+        SavedNotePopup.PlacementTarget = control;
+        SavedNotePopup.IsOpen = true;
+        AnimateSavedNoteCard();
+    }
+
+    private void AnimateSavedNoteCard()
+    {
+        var hiddenOpacity = (double)FindResource("FloatingSurfaceHiddenOpacity");
+        var hiddenScale = (double)FindResource("FloatingSurfaceHiddenScale");
+        var hiddenOffset = (double)FindResource("FloatingSurfaceHiddenOffset");
+        var fadeDuration = (Duration)FindResource("FloatingSurfaceFadeDuration");
+        var motionDuration = (Duration)FindResource("FloatingSurfaceMotionDuration");
+        var ease = (IEasingFunction)FindResource("FloatingSurfaceEntranceEase");
+
+        SavedNoteCard.BeginAnimation(OpacityProperty, null);
+        SavedNoteCardScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        SavedNoteCardScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        SavedNoteCardTranslate.BeginAnimation(TranslateTransform.YProperty, null);
+        SavedNoteCard.Opacity = hiddenOpacity;
+        SavedNoteCardScale.ScaleX = hiddenScale;
+        SavedNoteCardScale.ScaleY = hiddenScale;
+        SavedNoteCardTranslate.Y = hiddenOffset;
+        SavedNoteCard.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(hiddenOpacity, 1, fadeDuration) { EasingFunction = ease });
+        SavedNoteCardScale.BeginAnimation(ScaleTransform.ScaleXProperty,
+            new DoubleAnimation(hiddenScale, 1, motionDuration) { EasingFunction = ease });
+        SavedNoteCardScale.BeginAnimation(ScaleTransform.ScaleYProperty,
+            new DoubleAnimation(hiddenScale, 1, motionDuration) { EasingFunction = ease });
+        SavedNoteCardTranslate.BeginAnimation(TranslateTransform.YProperty,
+            new DoubleAnimation(hiddenOffset, 0, motionDuration) { EasingFunction = ease });
+    }
+
+    private void ScheduleSavedNoteClose()
+    {
+        if (!SavedNotePopup.IsOpen || _isEditingSavedNote)
+        {
+            return;
+        }
+        _savedNoteCloseTimer.Stop();
+        _savedNoteCloseTimer.Start();
+    }
+
+    private void SavedNoteCard_MouseEnter(object sender, MouseEventArgs e) => _savedNoteCloseTimer.Stop();
+
+    private void SavedNoteCard_MouseLeave(object sender, MouseEventArgs e) => ScheduleSavedNoteClose();
+
+    private void SetSavedNoteEditMode(bool editing)
+    {
+        _isEditingSavedNote = editing;
+        SavedNoteTextBox.IsReadOnly = !editing;
+        SavedNoteViewActions.Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
+        SavedNoteEditActions.Visibility = editing ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void SavedNoteEdit_Click(object sender, RoutedEventArgs e)
+    {
+        _savedNoteCloseTimer.Stop();
+        SetSavedNoteEditMode(true);
+        SavedNoteTextBox.Focus();
+        SavedNoteTextBox.CaretIndex = SavedNoteTextBox.Text.Length;
+    }
+
+    private void SavedNoteEditCancel_Click(object sender, RoutedEventArgs e)
+    {
+        SavedNoteTextBox.Text = _savedNoteAnnotation?.Note ?? string.Empty;
+        SetSavedNoteEditMode(false);
+    }
+
+    private void SavedNoteSave_Click(object sender, RoutedEventArgs e)
+    {
+        if (_savedNoteAnnotation is null)
+        {
+            return;
+        }
+        var note = SavedNoteTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(note))
+        {
+            ShowToast("Write a note first");
+            return;
+        }
+
+        _savedNoteAnnotation.Note = note;
+        SaveWorkspaceState();
+        RefreshSavedNoteTarget();
+        SetSavedNoteEditMode(false);
+        ShowToast("Note updated");
+    }
+
+    private void SavedNoteDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (_savedNoteAnnotation is null)
+        {
+            return;
+        }
+
+        ClearSavedNoteUnderline(_savedNoteAnnotation);
+        _savedNoteAnnotation.Note = string.Empty;
+        RemoveEmptyAnnotation(_savedNoteAnnotation);
+        SaveWorkspaceState();
+        RefreshSavedNoteTarget();
+        SavedNotePopup.IsOpen = false;
+        ShowToast("Note deleted");
+    }
+
+    private void ClearSavedNoteUnderline(TextAnnotationState annotation)
+    {
+        if (_savedNoteTarget is not RichTextBox richTextBox)
+        {
+            return;
+        }
+
+        var start = GetTextPointerAtTextOffset(richTextBox.Document, annotation.Start);
+        var end = GetTextPointerAtTextOffset(richTextBox.Document, annotation.Start + annotation.Length);
+        if (start is not null && end is not null && start.CompareTo(end) < 0)
+        {
+            new TextRange(start, end).ApplyPropertyValue(Inline.TextDecorationsProperty, null);
+        }
+    }
+
+    private void RefreshSavedNoteTarget()
+    {
+        if (_savedNoteTarget is TextBox textBox)
+        {
+            EnsureTextAnnotationAdorner(textBox).InvalidateVisual();
+        }
+        else if (_savedNoteTarget is RichTextBox richTextBox)
+        {
+            ApplySavedRichTextAnnotations(richTextBox);
+        }
+    }
+
+    private void SavedNotePopup_Closed(object? sender, EventArgs e)
+    {
+        _savedNoteCloseTimer.Stop();
+        _savedNoteAnnotation = null;
+        _savedNoteTarget = null;
+        _isEditingSavedNote = false;
     }
 
     private void AddExtraScripturePanel(string bookName, int chapter, int? selectedVerse, string subtitle)
