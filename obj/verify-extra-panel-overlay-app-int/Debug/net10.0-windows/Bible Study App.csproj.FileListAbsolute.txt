@@ -1,4 +1,0 @@
-C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panel-overlay-app-int\Debug\net10.0-windows\MainWindow.g.cs
-C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panel-overlay-app-int\Debug\net10.0-windows\App.g.cs
-C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panel-overlay-app-int\Debug\net10.0-windows\Bible Study App_MarkupCompile.cache
-C:\Users\jake1\OneDrive\Desktop\Bible Study App\obj\verify-extra-panel-overlay-app-int\Debug\net10.0-windows\Bible Study App_MarkupCompile.lref

@@ -1,0 +1,7 @@
+<Project>
+  <!-- Keep generated .NET files out of the source-project folders. -->
+  <PropertyGroup>
+    <BaseOutputPath>$(MSBuildThisFileDirectory).build\$(MSBuildProjectName)\bin\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory).build\$(MSBuildProjectName)\obj\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

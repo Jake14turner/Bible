@@ -6,7 +6,10 @@
 *.userosscache
 *.sln.docstates
 
-# .NET build and intermediate output
+# Centralized .NET build output (configured in Directory.Build.props)
+.build/
+
+# .NET build and intermediate output (also catches legacy/local output)
 [Bb]in/
 [Oo]bj/
 **/[Bb]in/
@@ -30,4 +33,4 @@ artifacts/
 *.temp
 *.bak
 
-*.codex_obj
+.codex_obj/
