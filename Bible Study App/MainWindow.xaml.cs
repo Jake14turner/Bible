@@ -116,6 +116,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<ReminderScheduleItem> _reminderScheduleItems = new();
     private readonly ObservableCollection<ReminderPreset> _reminderPresets = new();
     private readonly ObservableCollection<ColorSchemePreset> _colorSchemePresets = new();
+    private readonly ObservableCollection<ScriptureMemoryState> _scriptureMemoryItems = new();
     private readonly ObservableCollection<string> _availableAiModels = new();
     private readonly ObservableCollection<ScriptureVerseDisplay> _scriptureVerses = new();
     private readonly List<ScheduledNotificationState> _scheduledNotifications = new();
@@ -229,6 +230,15 @@ public partial class MainWindow : Window
     private bool _isClosingSelectionUi;
     private bool _suppressSelectionSubmenuClose;
     private IReadOnlyList<TextAnnotationState> _pendingNoteAnnotations = [];
+    private ScriptureMemoryState? _activeMemoryPassage;
+    private int _activeMemorySectionIndex;
+    private string _memoryTypedText = string.Empty;
+    private readonly List<bool> _memoryTypedErrors = new();
+    private bool _memoryShowMoreWords;
+    private TextPointer? _memoryCaretPointer;
+    private bool _memorySessionComplete;
+    private int _memorySectionGeneration;
+    private bool _isUpdatingMemoryRange;
 
     public ObservableCollection<BibleBook> BibleBooks { get; } = new();
     public ObservableCollection<BibleBook> OldTestamentBooks { get; } = new();
@@ -312,8 +322,10 @@ public partial class MainWindow : Window
         ReminderPresetSelect.ItemsSource = _reminderPresets;
         ColorSchemePresetItems.ItemsSource = _colorSchemePresets;
         AiModelComboBox.ItemsSource = _availableAiModels;
+        MemoryPassageItems.ItemsSource = _scriptureMemoryItems;
         LoadWorkspaceState();
         LoadScriptureText();
+        InitializeMemorySelectors();
         LoadTagntData();
         WorkspaceCountText.Text = $"{BibleBooks.Count} books ready";
         RenderBreadcrumbs();
@@ -512,6 +524,11 @@ public partial class MainWindow : Window
 
             _scheduledNotifications.AddRange(state.ScheduledNotifications
                 .Where(notification => !string.IsNullOrWhiteSpace(notification.SequenceId)));
+            foreach (var memoryItem in state.ScriptureMemoryPassages)
+            {
+                memoryItem.NormalizeLegacyRange();
+                _scriptureMemoryItems.Add(memoryItem);
+            }
 
             OldTestamentBooksExpander.IsExpanded = state.OldTestamentBooksExpanded;
             NewTestamentBooksExpander.IsExpanded = state.NewTestamentBooksExpanded;
@@ -727,6 +744,7 @@ public partial class MainWindow : Window
                 ScheduledNotifications = _scheduledNotifications
                     .OrderByDescending(notification => notification.CreatedAt)
                     .ToList(),
+                ScriptureMemoryPassages = _scriptureMemoryItems.ToList(),
                 OldTestamentBooksExpanded = OldTestamentBooksExpander.IsExpanded,
                 NewTestamentBooksExpanded = NewTestamentBooksExpander.IsExpanded,
                 ReminderSettings = CreateReminderSettingsState(),
@@ -1250,6 +1268,622 @@ public partial class MainWindow : Window
     private void TodayDashboard_Click(object sender, RoutedEventArgs e)
     {
         RunPageTransition(sender, ShowTodayDashboard);
+    }
+
+    private void ScriptureMemoryNav_Click(object sender, RoutedEventArgs e)
+    {
+        RunPageTransition(sender, ShowScriptureMemory);
+    }
+
+    private void ShowScriptureMemory()
+    {
+        _currentStudy = null;
+        LibraryPanel.Visibility = Visibility.Collapsed;
+        WorkspacePanel.Visibility = Visibility.Collapsed;
+        StudyPanel.Visibility = Visibility.Collapsed;
+        TodayPanel.Visibility = Visibility.Collapsed;
+        ReminderSettingsPanel.Visibility = Visibility.Collapsed;
+        SetSettingsPanelVisibility(Visibility.Collapsed);
+        ScriptureMemoryPanel.Visibility = Visibility.Visible;
+        MemoryLibraryView.Visibility = Visibility.Visible;
+        MemoryPracticeView.Visibility = Visibility.Collapsed;
+        MainHeading.Text = "Scripture Memory";
+        MainSubheading.Text = "Learn the words, then let the cues fall away.";
+        MainSubheading.Visibility = Visibility.Visible;
+        FlattenContentShell();
+        HeaderBackButton.Visibility = Visibility.Collapsed;
+        WorkspaceStatusCard.Visibility = Visibility.Collapsed;
+        PassagePickerCard.Visibility = Visibility.Collapsed;
+        SetActiveNavTab(AppNavTab.ScriptureMemory);
+        BreadcrumbTrail.Children.Clear();
+        RefreshMemoryLibrary();
+    }
+
+    private void InitializeMemorySelectors()
+    {
+        MemoryModalBookSelect.ItemsSource = BibleBooks;
+        MemoryModalBookSelect.SelectedItem = BibleBooks.FirstOrDefault(book => book.Name == "Genesis") ?? BibleBooks.FirstOrDefault();
+        RefreshMemoryLibrary();
+    }
+
+    private void MemoryOpenPassageModal_Click(object sender, RoutedEventArgs e)
+    {
+        var genesis = BibleBooks.FirstOrDefault(book => book.Name == "Genesis") ?? BibleBooks.FirstOrDefault();
+        MemoryModalBookSelect.SelectedItem = genesis;
+        ConfigureMemoryModalForBook(genesis);
+        MemoryPassageModalOverlay.Visibility = Visibility.Visible;
+        MemoryPassageModalOverlay.Opacity = 0;
+        MemoryPassageModalScale.ScaleX = 0.94;
+        MemoryPassageModalScale.ScaleY = 0.94;
+        MemoryPassageModalTranslate.Y = 10;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        MemoryPassageModalOverlay.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(170)) { EasingFunction = ease });
+        MemoryPassageModalScale.BeginAnimation(ScaleTransform.ScaleXProperty,
+            new DoubleAnimation(0.94, 1, TimeSpan.FromMilliseconds(220)) { EasingFunction = ease });
+        MemoryPassageModalScale.BeginAnimation(ScaleTransform.ScaleYProperty,
+            new DoubleAnimation(0.94, 1, TimeSpan.FromMilliseconds(220)) { EasingFunction = ease });
+        MemoryPassageModalTranslate.BeginAnimation(TranslateTransform.YProperty,
+            new DoubleAnimation(10, 0, TimeSpan.FromMilliseconds(220)) { EasingFunction = ease });
+        MemoryPassageModalOverlay.Focus();
+    }
+
+    private void MemoryClosePassageModal_Click(object sender, RoutedEventArgs e) => CloseMemoryPassageModal();
+
+    private void MemoryPassageModalOverlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (ReferenceEquals(e.OriginalSource, MemoryPassageModalOverlay))
+        {
+            CloseMemoryPassageModal();
+        }
+    }
+
+    private void MemoryPassageModalOverlay_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            CloseMemoryPassageModal();
+            e.Handled = true;
+        }
+    }
+
+    private void CloseMemoryPassageModal()
+    {
+        if (MemoryPassageModalOverlay.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+        var fade = new DoubleAnimation(MemoryPassageModalOverlay.Opacity, 0, TimeSpan.FromMilliseconds(120))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+        };
+        fade.Completed += (_, _) => MemoryPassageModalOverlay.Visibility = Visibility.Collapsed;
+        MemoryPassageModalOverlay.BeginAnimation(OpacityProperty, fade);
+    }
+
+    private void MemoryModalBookSelect_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingMemoryRange || MemoryModalBookSelect.SelectedItem is not BibleBook book)
+        {
+            return;
+        }
+        ConfigureMemoryModalForBook(book);
+    }
+
+    private void ConfigureMemoryModalForBook(BibleBook? book)
+    {
+        if (book is null)
+        {
+            return;
+        }
+        _isUpdatingMemoryRange = true;
+        var chapters = Enumerable.Range(1, book.Chapters).ToList();
+        MemoryFromChapterSelect.ItemsSource = chapters;
+        MemoryThroughChapterSelect.ItemsSource = chapters;
+        MemoryFromChapterSelect.SelectedItem = 1;
+        MemoryThroughChapterSelect.SelectedItem = 1;
+        SetMemoryVerseOptions(MemoryFromVerseSelect, book, 1, 1);
+        SetMemoryVerseOptions(MemoryThroughVerseSelect, book, 1, 3);
+        _isUpdatingMemoryRange = false;
+        UpdateMemoryModalPassagePreview();
+    }
+
+    private static void SetMemoryVerseOptions(ComboBox selector, BibleBook book, int chapter, int selectedVerse)
+    {
+        var count = chapter >= 1 && chapter <= book.VerseCounts.Length ? book.VerseCounts[chapter - 1] : 1;
+        selector.ItemsSource = Enumerable.Range(1, count).ToList();
+        selector.SelectedItem = Math.Clamp(selectedVerse, 1, count);
+    }
+
+    private void MemoryFromChapterSelect_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingMemoryRange || MemoryModalBookSelect.SelectedItem is not BibleBook book
+            || MemoryFromChapterSelect.SelectedItem is not int chapter)
+        {
+            return;
+        }
+        _isUpdatingMemoryRange = true;
+        SetMemoryVerseOptions(MemoryFromVerseSelect, book, chapter, 1);
+        if (MemoryThroughChapterSelect.SelectedItem is not int throughChapter || throughChapter < chapter)
+        {
+            MemoryThroughChapterSelect.SelectedItem = chapter;
+            SetMemoryVerseOptions(MemoryThroughVerseSelect, book, chapter, 1);
+        }
+        _isUpdatingMemoryRange = false;
+        UpdateMemoryModalPassagePreview();
+    }
+
+    private void MemoryThroughChapterSelect_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingMemoryRange || MemoryModalBookSelect.SelectedItem is not BibleBook book
+            || MemoryThroughChapterSelect.SelectedItem is not int chapter)
+        {
+            return;
+        }
+        _isUpdatingMemoryRange = true;
+        if (MemoryFromChapterSelect.SelectedItem is int fromChapter && chapter < fromChapter)
+        {
+            chapter = fromChapter;
+            MemoryThroughChapterSelect.SelectedItem = chapter;
+        }
+        SetMemoryVerseOptions(MemoryThroughVerseSelect, book, chapter, 1);
+        _isUpdatingMemoryRange = false;
+        UpdateMemoryModalPassagePreview();
+    }
+
+    private void MemoryModalRange_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_isUpdatingMemoryRange)
+        {
+            UpdateMemoryModalPassagePreview();
+        }
+    }
+
+    private void UpdateMemoryModalPassagePreview()
+    {
+        if (!TryGetMemoryModalRange(out var book, out var startChapter, out var startVerse, out var endChapter, out var endVerse))
+        {
+            MemoryModalPassagePreview.Text = string.Empty;
+            return;
+        }
+        if (startChapter == endChapter && endVerse < startVerse)
+        {
+            endVerse = startVerse;
+            _isUpdatingMemoryRange = true;
+            MemoryThroughVerseSelect.SelectedItem = endVerse;
+            _isUpdatingMemoryRange = false;
+        }
+        MemoryModalPassagePreview.Text = $"From {book.Name} {startChapter}:{startVerse} through {book.Name} {endChapter}:{endVerse}";
+    }
+
+    private bool TryGetMemoryModalRange(out BibleBook book, out int startChapter, out int startVerse,
+        out int endChapter, out int endVerse)
+    {
+        book = MemoryModalBookSelect.SelectedItem as BibleBook ?? BibleBooks[0];
+        startChapter = MemoryFromChapterSelect.SelectedItem as int? ?? 0;
+        startVerse = MemoryFromVerseSelect.SelectedItem as int? ?? 0;
+        endChapter = MemoryThroughChapterSelect.SelectedItem as int? ?? 0;
+        endVerse = MemoryThroughVerseSelect.SelectedItem as int? ?? 0;
+        return startChapter > 0 && startVerse > 0 && endChapter > 0 && endVerse > 0;
+    }
+
+    private void MemoryAddPassage_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetMemoryModalRange(out var book, out var startChapter, out var startVerse,
+                out var endChapter, out var endVerse))
+        {
+            ShowToast("Choose a passage first");
+            return;
+        }
+
+        if (_scriptureMemoryItems.Any(item => item.BookName == book.Name
+                                             && item.StartChapter == startChapter && item.StartVerse == startVerse
+                                             && item.EndChapter == endChapter && item.EndVerse == endVerse))
+        {
+            ShowToast("That passage is already in memory");
+            return;
+        }
+
+        var item = new ScriptureMemoryState
+        {
+            BookName = book.Name,
+            Chapter = startChapter,
+            StartChapter = startChapter,
+            StartVerse = startVerse,
+            EndChapter = endChapter,
+            EndVerse = endVerse,
+            Translation = _scriptureTranslationLabel,
+            CreatedAt = DateTimeOffset.Now
+        };
+        for (var chapter = startChapter; chapter <= endChapter; chapter++)
+        {
+            if (!TryGetChapterVerses(book.Name, chapter, out var verses))
+            {
+                continue;
+            }
+            var firstVerse = chapter == startChapter ? startVerse : 1;
+            var lastVerse = chapter == endChapter ? Math.Min(endVerse, verses.Count) : verses.Count;
+            for (var verse = firstVerse; verse <= lastVerse; verse++)
+            {
+                item.Sections.Add(new ScriptureMemorySectionState
+                {
+                    Chapter = chapter,
+                    Verse = verse,
+                    Text = verses[verse - 1].Trim()
+                });
+            }
+        }
+
+        if (item.Sections.Count == 0)
+        {
+            ShowToast("That passage could not be loaded");
+            return;
+        }
+
+        _scriptureMemoryItems.Insert(0, item);
+        CloseMemoryPassageModal();
+        QueueWorkspaceSave();
+        RefreshMemoryLibrary();
+        AnimateMemoryCardArrival();
+        ShowToast($"{item.Reference} added");
+    }
+
+    private void AnimateMemoryCardArrival()
+    {
+        MemoryPassageItems.Opacity = 0.55;
+        MemoryPassageItems.BeginAnimation(OpacityProperty, new DoubleAnimation(0.55, 1, TimeSpan.FromMilliseconds(220))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        });
+    }
+
+    private void RefreshMemoryLibrary()
+    {
+        MemoryEmptyState.Visibility = _scriptureMemoryItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        MemoryPassageItems.Items.Refresh();
+    }
+
+    private void MemoryRemovePassage_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: ScriptureMemoryState item })
+        {
+            return;
+        }
+        _scriptureMemoryItems.Remove(item);
+        QueueWorkspaceSave();
+        RefreshMemoryLibrary();
+        ShowToast("Memory passage removed");
+    }
+
+    private void MemoryPractice_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ScriptureMemoryState item })
+        {
+            BeginMemoryPractice(item);
+        }
+    }
+
+    private void BeginMemoryPractice(ScriptureMemoryState item)
+    {
+        if (item.Sections.Count == 0)
+        {
+            return;
+        }
+        _activeMemoryPassage = item;
+        _activeMemorySectionIndex = 0;
+        _memorySessionComplete = false;
+        MemoryLibraryView.Visibility = Visibility.Collapsed;
+        MemoryPracticeView.Visibility = Visibility.Visible;
+        StartMemorySection(0, animate: true);
+        Dispatcher.BeginInvoke(() => MemoryPracticeView.Focus(), DispatcherPriority.Input);
+    }
+
+    private void StartMemorySection(int sectionIndex, bool animate)
+    {
+        if (_activeMemoryPassage is null || sectionIndex < 0 || sectionIndex >= _activeMemoryPassage.Sections.Count)
+        {
+            return;
+        }
+        _activeMemorySectionIndex = sectionIndex;
+        _memorySectionGeneration++;
+        _memoryTypedText = string.Empty;
+        _memoryTypedErrors.Clear();
+        _memoryShowMoreWords = false;
+        _memorySessionComplete = false;
+        var section = _activeMemoryPassage.Sections[sectionIndex];
+        MemoryPracticeReference.Text = $"{_activeMemoryPassage.BookName} {section.Chapter}:{section.Verse}";
+        MemoryPracticeStage.Text = $"{ScriptureMemoryState.GetStageLabel(section.CueLevel)} · {_activeMemoryPassage.Translation}";
+        MemoryPracticeSectionProgress.Text = $"{sectionIndex + 1} / {_activeMemoryPassage.Sections.Count}";
+        MemoryPracticeFeedback.Text = "Start typing anywhere";
+        RenderMemoryPracticeText(animateCaret: false);
+        if (animate)
+        {
+            MemoryPracticeTextView.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(240))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            });
+        }
+    }
+
+    private void MemoryPracticeBack_Click(object sender, RoutedEventArgs e)
+    {
+        _activeMemoryPassage = null;
+        MemoryPracticeView.Visibility = Visibility.Collapsed;
+        MemoryLibraryView.Visibility = Visibility.Visible;
+        RefreshMemoryLibrary();
+    }
+
+    private void MemoryPracticeView_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        MemoryPracticeView.Focus();
+    }
+
+    private void MemoryPracticeView_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        if (_activeMemoryPassage is null || _memorySessionComplete || string.IsNullOrEmpty(e.Text))
+        {
+            return;
+        }
+        var target = CurrentMemorySection.Text;
+        foreach (var inputCharacter in e.Text)
+        {
+            if (_memoryTypedText.Length >= target.Length || char.IsControl(inputCharacter))
+            {
+                continue;
+            }
+            var expected = target[_memoryTypedText.Length];
+            _memoryTypedText += inputCharacter;
+            _memoryTypedErrors.Add(char.ToUpperInvariant(inputCharacter) != char.ToUpperInvariant(expected));
+        }
+        RenderMemoryPracticeText(animateCaret: true);
+        if (_memoryTypedText.Length == target.Length)
+        {
+            CompleteMemorySection();
+        }
+        e.Handled = true;
+    }
+
+    private void MemoryPracticeView_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_activeMemoryPassage is null)
+        {
+            return;
+        }
+        if (e.Key == Key.Back && _memoryTypedText.Length > 0 && !_memorySessionComplete)
+        {
+            _memoryTypedText = _memoryTypedText[..^1];
+            _memoryTypedErrors.RemoveAt(_memoryTypedErrors.Count - 1);
+            RenderMemoryPracticeText(animateCaret: true);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter && _memorySessionComplete)
+        {
+            StartMemorySection(0, animate: true);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            MemoryPracticeBack_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+        }
+    }
+
+    private ScriptureMemorySectionState CurrentMemorySection => _activeMemoryPassage!.Sections[_activeMemorySectionIndex];
+
+    private void RenderMemoryPracticeText(bool animateCaret)
+    {
+        if (_activeMemoryPassage is null)
+        {
+            return;
+        }
+        var section = CurrentMemorySection;
+        var target = section.Text;
+        var wordIndexes = BuildMemoryWordIndexes(target);
+        var effectiveLevel = Math.Max(0, section.CueLevel - (_memoryShowMoreWords ? 1 : 0));
+        MemoryPracticeParagraph.Inlines.Clear();
+        _memoryCaretPointer = null;
+
+        for (var index = 0; index < target.Length; index++)
+        {
+            var typed = index < _memoryTypedText.Length;
+            var isError = typed && _memoryTypedErrors[index];
+            var wordIndex = wordIndexes[index];
+            var cueVisible = char.IsWhiteSpace(target[index]) || ShouldShowMemoryWord(_activeMemoryPassage.Id,
+                _activeMemorySectionIndex, wordIndex, effectiveLevel);
+            var displayCharacter = typed ? _memoryTypedText[index] : target[index];
+            var run = new Run(displayCharacter.ToString())
+            {
+                Foreground = typed
+                    ? (isError ? GetResourceBrush("Coral") : GetResourceBrush("TextPrimary"))
+                    : (cueVisible ? GetResourceBrush("TextMuted") : Brushes.Transparent),
+                FontWeight = typed ? FontWeights.SemiBold : FontWeights.Normal
+            };
+            MemoryPracticeParagraph.Inlines.Add(run);
+            if (index == _memoryTypedText.Length)
+            {
+                _memoryCaretPointer = run.ContentStart;
+            }
+        }
+        _memoryCaretPointer ??= MemoryPracticeParagraph.ContentEnd;
+
+        var progress = target.Length == 0 ? 0 : (double)_memoryTypedText.Length / target.Length;
+        var targetWidth = 340 * progress;
+        MemoryTypingProgress.BeginAnimation(FrameworkElement.WidthProperty, new DoubleAnimation(targetWidth, TimeSpan.FromMilliseconds(120))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        });
+        var mistakes = _memoryTypedErrors.Count(value => value);
+        MemoryPracticeFeedback.Text = _memoryTypedText.Length == 0
+            ? (_memoryShowMoreWords ? "More cues shown for this attempt" : "Start typing anywhere")
+            : mistakes == 0 ? "Clean so far" : $"{mistakes} {(mistakes == 1 ? "mistake" : "mistakes")} · backspace to correct";
+        Dispatcher.BeginInvoke(() => UpdateMemorySmoothCaret(animateCaret), DispatcherPriority.Render);
+    }
+
+    private static int[] BuildMemoryWordIndexes(string text)
+    {
+        var indexes = new int[text.Length];
+        var word = -1;
+        var insideWord = false;
+        for (var index = 0; index < text.Length; index++)
+        {
+            if (char.IsWhiteSpace(text[index]))
+            {
+                insideWord = false;
+                indexes[index] = Math.Max(0, word);
+            }
+            else
+            {
+                if (!insideWord)
+                {
+                    word++;
+                    insideWord = true;
+                }
+                indexes[index] = word;
+            }
+        }
+        return indexes;
+    }
+
+    private static bool ShouldShowMemoryWord(string id, int sectionIndex, int wordIndex, int cueLevel)
+    {
+        var visiblePercent = cueLevel switch { 0 => 100, 1 => 70, 2 => 40, 3 => 15, _ => 0 };
+        if (visiblePercent == 100)
+        {
+            return true;
+        }
+        if (visiblePercent == 0)
+        {
+            return false;
+        }
+
+        // Keep one dependable starting cue until the intentional no-cues stage.
+        if (wordIndex == 0)
+        {
+            return true;
+        }
+
+        var seed = 17;
+        foreach (var character in id)
+        {
+            seed = unchecked((seed * 31) + character);
+        }
+        // 37 is coprime with 100, which distributes neighboring words around the
+        // cue range instead of clustering every word in a short verse together.
+        var baseScore = (seed & int.MaxValue) % 100;
+        var score = (baseScore + (sectionIndex * 19) + (wordIndex * 37)) % 100;
+        return score < visiblePercent;
+    }
+
+    private void UpdateMemorySmoothCaret(bool animate)
+    {
+        if (_memoryCaretPointer is null || !MemoryPracticeView.IsVisible)
+        {
+            return;
+        }
+        var rect = _memoryCaretPointer.GetCharacterRect(LogicalDirection.Forward);
+        var target = MemoryPracticeTextView.TranslatePoint(new Point(rect.X, rect.Y), MemoryPracticeCaretLayer);
+        MemorySmoothCaret.Height = Math.Max(30, rect.Height);
+        var currentLeft = Canvas.GetLeft(MemorySmoothCaret);
+        var currentTop = Canvas.GetTop(MemorySmoothCaret);
+        if (!animate || double.IsNaN(currentLeft) || double.IsNaN(currentTop))
+        {
+            MemorySmoothCaret.BeginAnimation(Canvas.LeftProperty, null);
+            MemorySmoothCaret.BeginAnimation(Canvas.TopProperty, null);
+            Canvas.SetLeft(MemorySmoothCaret, target.X);
+            Canvas.SetTop(MemorySmoothCaret, target.Y);
+            return;
+        }
+        var duration = TimeSpan.FromMilliseconds(88);
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        MemorySmoothCaret.BeginAnimation(Canvas.LeftProperty, new DoubleAnimation(target.X, duration) { EasingFunction = ease });
+        MemorySmoothCaret.BeginAnimation(Canvas.TopProperty, new DoubleAnimation(target.Y, duration) { EasingFunction = ease });
+    }
+
+    private void CompleteMemorySection()
+    {
+        if (_activeMemoryPassage is null)
+        {
+            return;
+        }
+        var section = CurrentMemorySection;
+        section.Attempts++;
+        var accuracy = section.Text.Length == 0
+            ? 1
+            : 1 - ((double)_memoryTypedErrors.Count(value => value) / section.Text.Length);
+        _activeMemoryPassage.LastPracticedAt = DateTimeOffset.Now;
+        if (accuracy < 0.9)
+        {
+            MemoryPracticeFeedback.Text = $"{accuracy:P0} accuracy · restart this section when ready";
+            QueueWorkspaceSave();
+            return;
+        }
+
+        section.SuccessfulRepetitions++;
+        if (section.SuccessfulRepetitions % 2 == 0 && section.CueLevel < 4)
+        {
+            section.CueLevel++;
+        }
+        QueueWorkspaceSave();
+        MemoryPracticeFeedback.Text = accuracy >= 0.99 ? "Section complete · clean recall" : $"Section complete · {accuracy:P0} accuracy";
+
+        var completedGeneration = _memorySectionGeneration;
+        var timer = new DispatcherTimer(DispatcherPriority.Input) { Interval = TimeSpan.FromMilliseconds(650) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (_activeMemoryPassage is null || completedGeneration != _memorySectionGeneration)
+            {
+                return;
+            }
+            if (_activeMemorySectionIndex + 1 < _activeMemoryPassage.Sections.Count)
+            {
+                StartMemorySection(_activeMemorySectionIndex + 1, animate: true);
+            }
+            else
+            {
+                _memorySessionComplete = true;
+                MemoryPracticeFeedback.Text = "Passage complete · press Enter to practice again";
+                RefreshMemoryLibrary();
+            }
+        };
+        timer.Start();
+    }
+
+    private void MemoryRestartSection_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeMemoryPassage is not null)
+        {
+            StartMemorySection(_activeMemorySectionIndex, animate: true);
+            MemoryPracticeView.Focus();
+        }
+    }
+
+    private void MemoryShowMoreWords_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeMemoryPassage is null)
+        {
+            return;
+        }
+        _memoryShowMoreWords = true;
+        _memoryTypedText = string.Empty;
+        _memoryTypedErrors.Clear();
+        RenderMemoryPracticeText(animateCaret: false);
+        MemoryPracticeView.Focus();
+    }
+
+    private void MemoryRelearnSection_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeMemoryPassage is null)
+        {
+            return;
+        }
+        var section = CurrentMemorySection;
+        section.CueLevel = Math.Max(0, section.CueLevel - 1);
+        section.SuccessfulRepetitions = 0;
+        QueueWorkspaceSave();
+        StartMemorySection(_activeMemorySectionIndex, animate: true);
+        ShowToast("More cues restored");
+        MemoryPracticeView.Focus();
     }
 
     private void OpenBook(BibleBook book)
@@ -1974,11 +2608,18 @@ public partial class MainWindow : Window
     private void SetActiveNavTab(AppNavTab activeTab)
     {
         CloseSelectionUi();
+        if (activeTab != AppNavTab.ScriptureMemory)
+        {
+            ScriptureMemoryPanel.Visibility = Visibility.Collapsed;
+        }
         _activeNavTab = activeTab;
         BibleStudyNavButton.Style = (Style)FindResource(activeTab == AppNavTab.BibleStudy
             ? "ActiveNavButtonStyle"
             : "NavButtonStyle");
         TodayNavButton.Style = (Style)FindResource(activeTab == AppNavTab.Today
+            ? "ActiveNavButtonStyle"
+            : "NavButtonStyle");
+        ScriptureMemoryNavButton.Style = (Style)FindResource(activeTab == AppNavTab.ScriptureMemory
             ? "ActiveNavButtonStyle"
             : "NavButtonStyle");
         SettingsNavButton.Style = (Style)FindResource(activeTab == AppNavTab.Settings
@@ -2005,6 +2646,7 @@ public partial class MainWindow : Window
         return activeTab switch
         {
             AppNavTab.Today => TodayNavButton,
+            AppNavTab.ScriptureMemory => ScriptureMemoryNavButton,
             AppNavTab.Settings => SettingsNavButton,
             _ => BibleStudyNavButton
         };
@@ -5724,6 +6366,7 @@ public partial class MainWindow : Window
         var menuVisibility = _sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
         BibleStudyNavButton.Visibility = menuVisibility;
         TodayNavButton.Visibility = menuVisibility;
+        ScriptureMemoryNavButton.Visibility = menuVisibility;
         SettingsNavButton.Visibility = menuVisibility;
         PrayerBoardNavButton.Visibility = menuVisibility;
         ReadingPlanNavButton.Visibility = menuVisibility;
@@ -9847,6 +10490,7 @@ public enum AppNavTab
 {
     BibleStudy,
     Today,
+    ScriptureMemory,
     ReminderSettings,
     Settings
 }
@@ -10203,6 +10847,8 @@ public sealed class WorkspaceState
 
     public List<ScheduledNotificationState> ScheduledNotifications { get; set; } = new();
 
+    public List<ScriptureMemoryState> ScriptureMemoryPassages { get; set; } = new();
+
     public bool OldTestamentBooksExpanded { get; set; } = true;
 
     public bool NewTestamentBooksExpanded { get; set; } = true;
@@ -10212,6 +10858,107 @@ public sealed class WorkspaceState
     public ColorSettingsState ColorSettings { get; set; } = new();
 
     public WindowPlacementState? WindowPlacement { get; set; }
+}
+
+public sealed class ScriptureMemoryState
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+
+    public string BookName { get; set; } = string.Empty;
+
+    public int Chapter { get; set; }
+
+    public int StartChapter { get; set; }
+
+    public int StartVerse { get; set; }
+
+    public int EndChapter { get; set; }
+
+    public int EndVerse { get; set; }
+
+    public string Translation { get; set; } = "ASV";
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
+
+    public DateTimeOffset? LastPracticedAt { get; set; }
+
+    public List<ScriptureMemorySectionState> Sections { get; set; } = new();
+
+    [JsonIgnore]
+    public string Reference => FormatReference(BookName, StartChapter, StartVerse, EndChapter, EndVerse);
+
+    [JsonIgnore]
+    public string Preview
+    {
+        get
+        {
+            var text = string.Join(" ", Sections.Select(section => section.Text)).Trim();
+            return text.Length > 180 ? $"{text[..177]}…" : text;
+        }
+    }
+
+    [JsonIgnore]
+    public string StageLabel => GetStageLabel(Sections.Count == 0 ? 0 : Sections.Min(section => section.CueLevel));
+
+    [JsonIgnore]
+    public string PracticeDetail
+    {
+        get
+        {
+            var attempts = Sections.Sum(section => section.Attempts);
+            if (LastPracticedAt is null)
+            {
+                return $"{Sections.Count} {(Sections.Count == 1 ? "verse" : "verses")} · not practiced yet";
+            }
+            return $"{Sections.Count} {(Sections.Count == 1 ? "verse" : "verses")} · {attempts} {(attempts == 1 ? "attempt" : "attempts")}";
+        }
+    }
+
+    public static string GetStageLabel(int cueLevel) => cueLevel switch
+    {
+        1 => "Familiar · 70% cues",
+        2 => "Recall · 40% cues",
+        3 => "Minimal cues · 15% cues",
+        4 => "Memorized · no cues",
+        _ => "Learn · all words visible"
+    };
+
+    public static string FormatReference(string bookName, int startChapter, int startVerse, int endChapter, int endVerse)
+    {
+        if (startChapter == endChapter && startVerse == endVerse)
+        {
+            return $"{bookName} {startChapter}:{startVerse}";
+        }
+        return startChapter == endChapter
+            ? $"{bookName} {startChapter}:{startVerse}–{endVerse}"
+            : $"{bookName} {startChapter}:{startVerse} through {endChapter}:{endVerse}";
+    }
+
+    public void NormalizeLegacyRange()
+    {
+        StartChapter = StartChapter > 0 ? StartChapter : Chapter;
+        EndChapter = EndChapter > 0 ? EndChapter : StartChapter;
+        Chapter = StartChapter;
+        foreach (var section in Sections)
+        {
+            section.Chapter = section.Chapter > 0 ? section.Chapter : StartChapter;
+        }
+    }
+}
+
+public sealed class ScriptureMemorySectionState
+{
+    public int Chapter { get; set; }
+
+    public int Verse { get; set; }
+
+    public string Text { get; set; } = string.Empty;
+
+    public int CueLevel { get; set; }
+
+    public int SuccessfulRepetitions { get; set; }
+
+    public int Attempts { get; set; }
 }
 
 public sealed class WindowPlacementState

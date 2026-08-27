@@ -831,23 +831,91 @@
         </Style>
 
         <Style TargetType="ComboBoxItem">
-            <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
+            <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
             <Setter Property="Padding" Value="10,7" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBoxItem">
                         <Border x:Name="Root"
                                 Background="{TemplateBinding Background}"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter />
+                                CornerRadius="0"
+                                Padding="{TemplateBinding Padding}"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform x:Name="ItemScale" ScaleX="1" ScaleY="1" />
+                            </Border.RenderTransform>
+                            <Grid>
+                                <Border x:Name="HoverShade"
+                                        Background="{DynamicResource AppBackground}"
+                                        CornerRadius="0"
+                                        Margin="0,-5"
+                                        Opacity="0" />
+                                <ContentPresenter Margin="2,0"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="Center" />
+                            </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource PanelBackground}" />
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverShade"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="0.34"
+                                                             Duration="0:0:0.14"
+                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="ItemScale"
+                                                             Storyboard.TargetProperty="ScaleX"
+                                                             To="1.018"
+                                                             Duration="0:0:0.14"
+                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="ItemScale"
+                                                             Storyboard.TargetProperty="ScaleY"
+                                                             To="1.055"
+                                                             Duration="0:0:0.14"
+                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                            <ThicknessAnimation Storyboard.TargetName="Root"
+                                                                Storyboard.TargetProperty="Padding"
+                                                                To="12,9"
+                                                                Duration="0:0:0.14"
+                                                                EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverShade"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="0"
+                                                             Duration="0:0:0.12"
+                                                             EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="ItemScale"
+                                                             Storyboard.TargetProperty="ScaleX"
+                                                             To="1"
+                                                             Duration="0:0:0.12"
+                                                             EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="ItemScale"
+                                                             Storyboard.TargetProperty="ScaleY"
+                                                             To="1"
+                                                             Duration="0:0:0.12"
+                                                             EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                            <ThicknessAnimation Storyboard.TargetName="Root"
+                                                                Storyboard.TargetProperty="Padding"
+                                                                To="10,7"
+                                                                Duration="0:0:0.12"
+                                                                EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource PanelBackground}" />
+                                <Setter TargetName="Root" Property="Background" Value="Transparent" />
                                 <Setter Property="Foreground" Value="{DynamicResource Mint}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -883,21 +951,76 @@
                                                 BorderThickness="{TemplateBinding BorderThickness}"
                                                 CornerRadius="8">
                                             <Grid>
+                                                <Border x:Name="ToggleHoverShade"
+                                                        Background="{DynamicResource AppBackground}"
+                                                        CornerRadius="8"
+                                                        Opacity="0" />
                                                 <ContentPresenter Margin="{TemplateBinding Padding}"
                                                                   HorizontalAlignment="Left"
                                                                   VerticalAlignment="Center"
                                                                   RecognizesAccessKey="True" />
-                                                <TextBlock Text="v"
+                                                <TextBlock x:Name="DropdownChevron"
+                                                           Text="⌄"
                                                            Foreground="{DynamicResource TextSecondary}"
                                                            FontWeight="Bold"
                                                            HorizontalAlignment="Right"
                                                            VerticalAlignment="Center"
-                                                           Margin="0,0,10,0" />
+                                                           Margin="0,0,10,0"
+                                                           RenderTransformOrigin="0.5,0.5">
+                                                    <TextBlock.RenderTransform>
+                                                        <RotateTransform x:Name="ChevronRotate" Angle="0" />
+                                                    </TextBlock.RenderTransform>
+                                                </TextBlock>
                                             </Grid>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource PanelBackground}" />
+                                                <Trigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="ToggleHoverShade"
+                                                                             Storyboard.TargetProperty="Opacity"
+                                                                             To="0.2"
+                                                                             Duration="0:0:0.14"
+                                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.EnterActions>
+                                                <Trigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="ToggleHoverShade"
+                                                                             Storyboard.TargetProperty="Opacity"
+                                                                             To="0"
+                                                                             Duration="0:0:0.12"
+                                                                             EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.ExitActions>
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Trigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="ChevronRotate"
+                                                                             Storyboard.TargetProperty="Angle"
+                                                                             To="180"
+                                                                             Duration="0:0:0.18"
+                                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.EnterActions>
+                                                <Trigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="ChevronRotate"
+                                                                             Storyboard.TargetProperty="Angle"
+                                                                             To="0"
+                                                                             Duration="0:0:0.15"
+                                                                             EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.ExitActions>
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
@@ -918,19 +1041,61 @@
                                    IsOpen="{TemplateBinding IsDropDownOpen}"
                                    AllowsTransparency="True"
                                    Focusable="False"
-                                   PopupAnimation="Slide">
-                                <Border Background="{DynamicResource AppBackground}"
+                                   PopupAnimation="Fade">
+                                <Border x:Name="DropDownSurface"
+                                        Background="{DynamicResource PanelBackground}"
                                         BorderBrush="{DynamicResource StrokeSoft}"
                                         BorderThickness="1"
                                         CornerRadius="8"
+                                        Padding="2"
+                                        Margin="0,6,0,0"
                                         MinWidth="{TemplateBinding ActualWidth}"
-                                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
-                                    <ScrollViewer>
-                                        <ItemsPresenter />
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                        Opacity="0"
+                                        RenderTransformOrigin="0.5,0">
+                                    <Border.RenderTransform>
+                                        <TransformGroup>
+                                            <ScaleTransform x:Name="DropDownScale" ScaleX="0.97" ScaleY="0.94" />
+                                            <TranslateTransform x:Name="DropDownTranslate" Y="-7" />
+                                        </TransformGroup>
+                                    </Border.RenderTransform>
+                                    <ScrollViewer HorizontalContentAlignment="Stretch"
+                                                  HorizontalScrollBarVisibility="Disabled">
+                                        <ItemsPresenter HorizontalAlignment="Stretch" />
                                     </ScrollViewer>
                                 </Border>
                             </Popup>
                         </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="DropDownSurface"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             From="0" To="1"
+                                                             Duration="0:0:0.16"
+                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="DropDownScale"
+                                                             Storyboard.TargetProperty="ScaleX"
+                                                             From="0.97" To="1"
+                                                             Duration="0:0:0.2"
+                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="DropDownScale"
+                                                             Storyboard.TargetProperty="ScaleY"
+                                                             From="0.94" To="1"
+                                                             Duration="0:0:0.2"
+                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="DropDownTranslate"
+                                                             Storyboard.TargetProperty="Y"
+                                                             From="-7" To="0"
+                                                             Duration="0:0:0.2"
+                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -1024,6 +1189,18 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock x:Name="StudyNotesNavText"
                                        Text="Today"
+                                       VerticalAlignment="Center"
+                                       FontSize="14" />
+                        </Grid>
+                    </Button>
+
+                    <Button x:Name="ScriptureMemoryNavButton"
+                            Style="{StaticResource NavButtonStyle}"
+                            PreviewMouseLeftButtonDown="SidebarNavButton_PreviewMouseLeftButtonDown"
+                            Click="ScriptureMemoryNav_Click">
+                        <Grid>
+                            <TextBlock x:Name="ScriptureMemoryNavText"
+                                       Text="Scripture Memory"
                                        VerticalAlignment="Center"
                                        FontSize="14" />
                         </Grid>
@@ -2124,6 +2301,454 @@
                                     </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
+                    </Grid>
+
+                    <Grid x:Name="ScriptureMemoryPanel" Visibility="Collapsed">
+                        <Grid x:Name="MemoryLibraryView">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <Grid Margin="8,0,8,18">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Your passages"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="22"
+                                               FontWeight="Black" />
+                                    <TextBlock Text="Practice a saved passage or add a new one."
+                                               Foreground="{DynamicResource TextSecondary}"
+                                               FontSize="12"
+                                               Margin="0,3,0,0" />
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        Content="Add passage"
+                                        Padding="20,11"
+                                        VerticalAlignment="Center"
+                                        Click="MemoryOpenPassageModal_Click" />
+                            </Grid>
+
+                            <Grid Grid.Row="1">
+                                <TextBlock x:Name="MemoryEmptyState"
+                                           Text="No memory passages yet. Add one above and begin with every word visible."
+                                           Foreground="{DynamicResource TextMuted}"
+                                           FontSize="14"
+                                           TextAlignment="Center"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           MaxWidth="360" />
+                                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsControl x:Name="MemoryPassageItems">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Width="330" Height="198" Margin="8">
+                                                    <Border Background="#050505"
+                                                            BorderBrush="#050505"
+                                                            BorderThickness="1"
+                                                            CornerRadius="6"
+                                                            Margin="0,10,10,0" />
+                                                    <Border x:Name="MemoryPaperSheet"
+                                                            Width="318"
+                                                            Height="186"
+                                                            Padding="18"
+                                                            Background="{DynamicResource TextPrimary}"
+                                                            BorderBrush="#111111"
+                                                            BorderThickness="1.5"
+                                                            CornerRadius="6"
+                                                            HorizontalAlignment="Right"
+                                                            VerticalAlignment="Top">
+                                                        <Border.RenderTransform>
+                                                            <TranslateTransform x:Name="MemoryPaperSheetTransform" />
+                                                        </Border.RenderTransform>
+                                                        <Grid>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto" />
+                                                            <RowDefinition Height="*" />
+                                                            <RowDefinition Height="Auto" />
+                                                        </Grid.RowDefinitions>
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel>
+                                                                <TextBlock Text="{Binding Reference}"
+                                                                           Foreground="#111111"
+                                                                           FontSize="19"
+                                                                           FontWeight="Black" />
+                                                                <TextBlock Text="{Binding StageLabel}"
+                                                                           Foreground="{DynamicResource PanelBackground}"
+                                                                           FontSize="12"
+                                                                           FontWeight="Bold"
+                                                                           Margin="0,3,0,0" />
+                                                            </StackPanel>
+                                                            <Button Grid.Column="1"
+                                                                    Style="{StaticResource PanelToolbarButtonStyle}"
+                                                                    Width="34" Height="34"
+                                                                    Padding="0"
+                                                                    Content="×"
+                                                                    Tag="{Binding}"
+                                                                    Foreground="#111111"
+                                                                    ToolTip="Remove passage"
+                                                                    Click="MemoryRemovePassage_Click" />
+                                                        </Grid>
+                                                        <TextBlock Grid.Row="1"
+                                                                   Text="{Binding Preview}"
+                                                                   Foreground="#333333"
+                                                                   FontSize="13"
+                                                                   TextWrapping="Wrap"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxHeight="62"
+                                                                   Margin="0,14,0,14" />
+                                                        <Grid Grid.Row="2">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Text="{Binding PracticeDetail}"
+                                                                       Foreground="{DynamicResource PanelBackground}"
+                                                                       FontSize="11"
+                                                                       VerticalAlignment="Center" />
+                                                            <Button Grid.Column="1"
+                                                                    Style="{StaticResource AccentButtonStyle}"
+                                                                    Content="Practice"
+                                                                    Padding="16,9"
+                                                                    Tag="{Binding}"
+                                                                    Click="MemoryPractice_Click" />
+                                                        </Grid>
+                                                        </Grid>
+                                                    </Border>
+                                                    <Grid.Triggers>
+                                                        <EventTrigger RoutedEvent="MouseEnter">
+                                                            <BeginStoryboard>
+                                                                <Storyboard>
+                                                                    <DoubleAnimation Storyboard.TargetName="MemoryPaperSheetTransform" Storyboard.TargetProperty="X" To="6" Duration="0:0:0.14" />
+                                                                    <DoubleAnimation Storyboard.TargetName="MemoryPaperSheetTransform" Storyboard.TargetProperty="Y" To="-6" Duration="0:0:0.14" />
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
+                                                        <EventTrigger RoutedEvent="MouseLeave">
+                                                            <BeginStoryboard>
+                                                                <Storyboard>
+                                                                    <DoubleAnimation Storyboard.TargetName="MemoryPaperSheetTransform" Storyboard.TargetProperty="X" To="0" Duration="0:0:0.14" />
+                                                                    <DoubleAnimation Storyboard.TargetName="MemoryPaperSheetTransform" Storyboard.TargetProperty="Y" To="0" Duration="0:0:0.14" />
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
+                                                    </Grid.Triggers>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Grid>
+                        </Grid>
+
+                        <Grid x:Name="MemoryPracticeView"
+                              Visibility="Collapsed"
+                              Focusable="True"
+                              PreviewTextInput="MemoryPracticeView_PreviewTextInput"
+                              PreviewKeyDown="MemoryPracticeView_PreviewKeyDown"
+                              MouseLeftButtonDown="MemoryPracticeView_MouseLeftButtonDown">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Button Style="{StaticResource PanelToolbarButtonStyle}"
+                                        Width="42" Height="42" Padding="0"
+                                        ToolTip="Back to memory library"
+                                        Click="MemoryPracticeBack_Click">
+                                    <Path Data="{StaticResource ChevronLeftIcon}"
+                                          Stroke="{DynamicResource TextPrimary}"
+                                          StrokeThickness="2"
+                                          Width="14" Height="14" />
+                                </Button>
+                                <StackPanel Grid.Column="1" Margin="14,0,0,0">
+                                    <TextBlock x:Name="MemoryPracticeReference"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="22"
+                                               FontWeight="Black" />
+                                    <TextBlock x:Name="MemoryPracticeStage"
+                                               Foreground="{DynamicResource Mint}"
+                                               FontSize="12"
+                                               FontWeight="Bold"
+                                               Margin="0,2,0,0" />
+                                </StackPanel>
+                                <TextBlock x:Name="MemoryPracticeSectionProgress"
+                                           Grid.Column="2"
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           FontWeight="Bold"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+
+                            <Grid Grid.Row="1" Margin="42,28">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid VerticalAlignment="Center">
+                                    <RichTextBox x:Name="MemoryPracticeTextView"
+                                                 IsReadOnly="True"
+                                                 IsReadOnlyCaretVisible="False"
+                                                 IsDocumentEnabled="False"
+                                                 Focusable="False"
+                                                 BorderThickness="0"
+                                                 Background="Transparent"
+                                                 Foreground="{DynamicResource TextPrimary}"
+                                                 FontFamily="Segoe UI"
+                                                 FontSize="28"
+                                                 Padding="0"
+                                                 VerticalAlignment="Center"
+                                                 MaxHeight="340"
+                                                 HorizontalScrollBarVisibility="Disabled"
+                                                 VerticalScrollBarVisibility="Disabled">
+                                        <FlowDocument PagePadding="0" LineHeight="44">
+                                            <Paragraph x:Name="MemoryPracticeParagraph" Margin="0" />
+                                        </FlowDocument>
+                                    </RichTextBox>
+                                    <Canvas x:Name="MemoryPracticeCaretLayer" IsHitTestVisible="False">
+                                        <Border x:Name="MemorySmoothCaret"
+                                                Width="2.5"
+                                                Height="34"
+                                                Background="{DynamicResource Mint}"
+                                                CornerRadius="1.25" />
+                                    </Canvas>
+                                </Grid>
+                                <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,20,0,0">
+                                    <TextBlock x:Name="MemoryPracticeFeedback"
+                                               Text="Start typing anywhere"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               HorizontalAlignment="Center" />
+                                    <Border Width="340" Height="4" Background="{DynamicResource AppBackground}"
+                                            CornerRadius="2" Margin="0,10,0,0">
+                                        <Border x:Name="MemoryTypingProgress"
+                                                Background="{DynamicResource Mint}"
+                                                CornerRadius="2"
+                                                Width="0"
+                                                HorizontalAlignment="Left" />
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+
+                            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Style="{StaticResource ChromeButtonStyle}"
+                                        Content="Restart section" Padding="16,9"
+                                        Click="MemoryRestartSection_Click" />
+                                <Button Style="{StaticResource ChromeButtonStyle}"
+                                        Content="Show more words" Padding="16,9" Margin="10,0,0,0"
+                                        Click="MemoryShowMoreWords_Click" />
+                                <Button Style="{StaticResource ChromeButtonStyle}"
+                                        Content="Relearn section" Padding="16,9" Margin="10,0,0,0"
+                                        Click="MemoryRelearnSection_Click" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="MemoryPassageModalOverlay"
+                              Panel.ZIndex="900"
+                              Background="#B8000000"
+                              Visibility="Collapsed"
+                              Focusable="True"
+                              PreviewKeyDown="MemoryPassageModalOverlay_PreviewKeyDown"
+                              MouseLeftButtonDown="MemoryPassageModalOverlay_MouseLeftButtonDown">
+                            <Border x:Name="MemoryPassageModalCard"
+                                    Style="{StaticResource NoteSurfaceStyle}"
+                                    Width="700"
+                                    Padding="24"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    RenderTransformOrigin="0.5,0.5">
+                                <Border.RenderTransform>
+                                    <TransformGroup>
+                                        <ScaleTransform x:Name="MemoryPassageModalScale" ScaleX="0.94" ScaleY="0.94" />
+                                        <TranslateTransform x:Name="MemoryPassageModalTranslate" Y="10" />
+                                    </TransformGroup>
+                                </Border.RenderTransform>
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,20">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Choose a passage"
+                                                       Foreground="{DynamicResource TextPrimary}"
+                                                       FontSize="23"
+                                                       FontWeight="Black" />
+                                            <TextBlock Text="Pick one verse or continue through another chapter."
+                                                       Foreground="{DynamicResource TextSecondary}"
+                                                       FontSize="13"
+                                                       Margin="0,4,0,0" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1"
+                                                Style="{StaticResource PanelToolbarButtonStyle}"
+                                                Width="38" Height="38" Padding="0"
+                                                Content="×"
+                                                Click="MemoryClosePassageModal_Click" />
+                                    </Grid>
+
+                                    <StackPanel Margin="0,0,0,18">
+                                        <TextBlock Text="Book"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   FontSize="11"
+                                                   FontWeight="Bold"
+                                                   Margin="2,0,0,6" />
+                                        <ComboBox x:Name="MemoryModalBookSelect"
+                                                  Height="44"
+                                                  Background="{DynamicResource PanelBackground}"
+                                                  Foreground="{DynamicResource TextPrimary}"
+                                                  BorderBrush="{DynamicResource StrokeSoft}"
+                                                  SelectionChanged="MemoryModalBookSelect_SelectionChanged">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Name}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="26" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource PanelBackground}"
+                                                CornerRadius="16"
+                                                Padding="16">
+                                            <StackPanel>
+                                                <TextBlock Text="FROM"
+                                                           Foreground="{DynamicResource Mint}"
+                                                           FontSize="11"
+                                                           FontWeight="Black"
+                                                           Margin="0,0,0,12" />
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="10" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel>
+                                                        <TextBlock Text="Chapter" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="1,0,0,5" />
+                                                        <ComboBox x:Name="MemoryFromChapterSelect"
+                                                                  Height="40"
+                                                                  Background="{DynamicResource AppBackground}"
+                                                                  Foreground="{DynamicResource TextPrimary}"
+                                                                  SelectionChanged="MemoryFromChapterSelect_SelectionChanged" />
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2">
+                                                        <TextBlock Text="Verse" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="1,0,0,5" />
+                                                        <ComboBox x:Name="MemoryFromVerseSelect"
+                                                                  Height="40"
+                                                                  Background="{DynamicResource AppBackground}"
+                                                                  Foreground="{DynamicResource TextPrimary}"
+                                                                  SelectionChanged="MemoryModalRange_SelectionChanged" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <TextBlock Grid.Column="1"
+                                                   Text="→"
+                                                   Foreground="{DynamicResource Mint}"
+                                                   FontSize="18"
+                                                   FontWeight="Black"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
+
+                                        <Border Grid.Column="2"
+                                                Background="{DynamicResource PanelBackground}"
+                                                CornerRadius="16"
+                                                Padding="16">
+                                            <StackPanel>
+                                                <TextBlock Text="THROUGH"
+                                                           Foreground="{DynamicResource Mint}"
+                                                           FontSize="11"
+                                                           FontWeight="Black"
+                                                           Margin="0,0,0,12" />
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="10" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel>
+                                                        <TextBlock Text="Chapter" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="1,0,0,5" />
+                                                        <ComboBox x:Name="MemoryThroughChapterSelect"
+                                                                  Height="40"
+                                                                  Background="{DynamicResource AppBackground}"
+                                                                  Foreground="{DynamicResource TextPrimary}"
+                                                                  SelectionChanged="MemoryThroughChapterSelect_SelectionChanged" />
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2">
+                                                        <TextBlock Text="Verse" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="1,0,0,5" />
+                                                        <ComboBox x:Name="MemoryThroughVerseSelect"
+                                                                  Height="40"
+                                                                  Background="{DynamicResource AppBackground}"
+                                                                  Foreground="{DynamicResource TextPrimary}"
+                                                                  SelectionChanged="MemoryModalRange_SelectionChanged" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+
+                                    <Border Background="{DynamicResource PanelBackground}"
+                                            CornerRadius="14"
+                                            Padding="14,11"
+                                            Margin="0,18,0,0">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Selected"
+                                                       Foreground="{DynamicResource TextMuted}"
+                                                       FontWeight="Bold"
+                                                       Margin="0,0,12,0" />
+                                            <TextBlock x:Name="MemoryModalPassagePreview"
+                                                       Grid.Column="1"
+                                                       Foreground="{DynamicResource TextPrimary}"
+                                                       FontWeight="Black"
+                                                       TextAlignment="Right" />
+                                        </Grid>
+                                    </Border>
+
+                                    <StackPanel Orientation="Horizontal"
+                                                HorizontalAlignment="Right"
+                                                Margin="0,20,0,0">
+                                        <Button Style="{StaticResource ChromeButtonStyle}"
+                                                Content="Cancel"
+                                                Padding="18,10"
+                                                Click="MemoryClosePassageModal_Click" />
+                                        <Button Style="{StaticResource AccentButtonStyle}"
+                                                Content="Add to memory"
+                                                Padding="20,10"
+                                                Margin="10,0,0,0"
+                                                Click="MemoryAddPassage_Click" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
                     </Grid>
 
                     <Grid x:Name="LibraryPanel">
