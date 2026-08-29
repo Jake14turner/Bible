@@ -29,6 +29,9 @@
         <SolidColorBrush x:Key="Violet" Color="#A98467" />
         <Geometry x:Key="ChevronLeftIcon">M 10,2 L 4,8 L 10,14</Geometry>
         <Geometry x:Key="ChevronRightIcon">M 4,2 L 10,8 L 4,14</Geometry>
+        <Geometry x:Key="ChevronDownIcon">M 2,5 L 8,11 L 14,5</Geometry>
+        <Geometry x:Key="EyeOpenIcon">M 1,8 C 4,3 6,2 8,2 C 10,2 12,3 15,8 C 12,13 10,14 8,14 C 6,14 4,13 1,8 M 8,5 A 3,3 0 1 1 7.99,5</Geometry>
+        <Geometry x:Key="EyeOffIcon">M 1,8 C 4,3 6,2 8,2 C 10,2 12,3 15,8 C 12,13 10,14 8,14 C 6,14 4,13 1,8 M 2,2 L 14,14</Geometry>
 
         <!-- Shared floating-surface tokens. The note editor is the visual source of truth. -->
         <sys:Double x:Key="FloatingSurfaceHiddenOpacity">0</sys:Double>
@@ -362,6 +365,9 @@
                                 <Setter TargetName="PART_Track" Property="Orientation" Value="Horizontal" />
                                 <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False" />
                                 <Setter TargetName="TrackBackground" Property="CornerRadius" Value="6" />
+                            </Trigger>
+                            <Trigger Property="Tag" Value="CompactSelect">
+                                <Setter Property="Width" Value="9" />
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="TrackBackground" Property="Background" Value="{DynamicResource Mint}" />
@@ -1100,6 +1106,383 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="MemoryCardRemoveButtonStyle" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="#111111" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid Background="Transparent">
+                            <ContentPresenter x:Name="RemoveGlyph"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="#000000" />
+                                <Setter Property="FontWeight" Value="Black" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="RemoveGlyph" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="MemoryConfidenceButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource ChromeButtonStyle}">
+            <Setter Property="Height" Value="48" />
+            <Setter Property="Margin" Value="5,0" />
+            <Setter Property="Padding" Value="16,0" />
+            <Setter Property="Background" Value="{DynamicResource AppBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource StrokeSoft}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+
+        <Style x:Key="MemoryConfidenceRecommendedButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource MemoryConfidenceButtonStyle}">
+            <Setter Property="Background" Value="{DynamicResource Mint}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Mint}" />
+            <Setter Property="Foreground" Value="{DynamicResource AppBackground}" />
+            <Setter Property="FontWeight" Value="Black" />
+        </Style>
+
+        <!-- Polished selects. Kept as an explicit style so it can be verified and evolved independently. -->
+        <Style x:Key="PolishedComboBoxItemStyle" TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="MinHeight" Value="42" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Grid x:Name="Row" MinHeight="{TemplateBinding MinHeight}"
+                              Background="Transparent" ClipToBounds="True">
+                            <Border x:Name="SelectedShade"
+                                    Background="{DynamicResource Mint}"
+                                    CornerRadius="6"
+                                    Opacity="0" />
+                            <Border x:Name="HoverShade"
+                                    Background="{DynamicResource PanelBackground}"
+                                    CornerRadius="6"
+                                    Opacity="0" />
+                            <Border x:Name="SelectionBar"
+                                    Width="3"
+                                    Margin="0,7"
+                                    HorizontalAlignment="Left"
+                                    Background="{DynamicResource Mint}"
+                                    CornerRadius="2"
+                                    Opacity="0"
+                                    RenderTransformOrigin="0.5,0.5">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="SelectionBarScale" ScaleY="0.35" />
+                                </Border.RenderTransform>
+                            </Border>
+                            <ContentPresenter x:Name="ItemContent"
+                                              ContentSource="Content"
+                                              Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+                                <ContentPresenter.RenderTransform>
+                                    <TranslateTransform x:Name="ItemTranslate" X="0" />
+                                </ContentPresenter.RenderTransform>
+                            </ContentPresenter>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="SelectedShade" Property="Opacity" Value="0.2" />
+                                <Setter TargetName="SelectionBar" Property="Opacity" Value="1" />
+                                <Setter Property="Foreground" Value="{DynamicResource Mint}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="SelectionBarScale"
+                                                             Storyboard.TargetProperty="ScaleY"
+                                                             To="1" Duration="0:0:0.16"
+                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="SelectionBarScale"
+                                                             Storyboard.TargetProperty="ScaleY"
+                                                             To="0.35" Duration="0:0:0.1"
+                                                             EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverShade"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.13"
+                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="ItemTranslate"
+                                                             Storyboard.TargetProperty="X"
+                                                             To="3" Duration="0:0:0.16"
+                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverShade"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.1"
+                                                             EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="ItemTranslate"
+                                                             Storyboard.TargetProperty="X"
+                                                             To="0" Duration="0:0:0.1"
+                                                             EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Row" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PolishedComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource StrokeSoft}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="MinHeight" Value="42" />
+            <Setter Property="Padding" Value="14,0,40,0" />
+            <Setter Property="MaxDropDownHeight" Value="360" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource PolishedComboBoxItemStyle}" />
+            <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid x:Name="SelectRoot" SnapsToDevicePixels="True">
+                            <ToggleButton x:Name="ToggleButton"
+                                          Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                          ClickMode="Press"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="ToggleSurface"
+                                                Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                CornerRadius="9">
+                                            <Grid ClipToBounds="True">
+                                                <Border x:Name="ToggleHoverShade"
+                                                        Background="{DynamicResource AppBackground}"
+                                                        CornerRadius="8"
+                                                        Opacity="0" />
+                                                <Border x:Name="ToggleOpenShade"
+                                                        Background="{DynamicResource Mint}"
+                                                        CornerRadius="8"
+                                                        Opacity="0" />
+                                                <Border Width="36"
+                                                        HorizontalAlignment="Right"
+                                                        Background="{DynamicResource AppBackground}"
+                                                        CornerRadius="0,8,8,0"
+                                                        Opacity="0.22" />
+                                                <Path Width="14" Height="10"
+                                                      HorizontalAlignment="Right"
+                                                      VerticalAlignment="Center"
+                                                      Margin="0,0,11,0"
+                                                      Data="{StaticResource ChevronDownIcon}"
+                                                      Stroke="{DynamicResource TextSecondary}"
+                                                      StrokeThickness="2"
+                                                      StrokeStartLineCap="Round"
+                                                      StrokeEndLineCap="Round"
+                                                      StrokeLineJoin="Round"
+                                                      Stretch="Uniform"
+                                                      RenderTransformOrigin="0.5,0.5">
+                                                    <Path.RenderTransform>
+                                                        <RotateTransform x:Name="ChevronRotate" Angle="0" />
+                                                    </Path.RenderTransform>
+                                                </Path>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Trigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="ToggleHoverShade"
+                                                                             Storyboard.TargetProperty="Opacity"
+                                                                             To="0.28" Duration="0:0:0.14"
+                                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.EnterActions>
+                                                <Trigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="ToggleHoverShade"
+                                                                             Storyboard.TargetProperty="Opacity"
+                                                                             To="0" Duration="0:0:0.1"
+                                                                             EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.ExitActions>
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="ToggleSurface" Property="BorderBrush" Value="{DynamicResource Mint}" />
+                                                <Trigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="ToggleOpenShade"
+                                                                             Storyboard.TargetProperty="Opacity"
+                                                                             To="0.12" Duration="0:0:0.16"
+                                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                                            <DoubleAnimation Storyboard.TargetName="ChevronRotate"
+                                                                             Storyboard.TargetProperty="Angle"
+                                                                             To="180" Duration="0:0:0.2"
+                                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.EnterActions>
+                                                <Trigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="ToggleOpenShade"
+                                                                             Storyboard.TargetProperty="Opacity"
+                                                                             To="0" Duration="0:0:0.11"
+                                                                             EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                                            <DoubleAnimation Storyboard.TargetName="ChevronRotate"
+                                                                             Storyboard.TargetProperty="Angle"
+                                                                             To="0" Duration="0:0:0.16"
+                                                                             EasingFunction="{StaticResource FloatingSurfaceExitEase}" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.ExitActions>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <ContentPresenter IsHitTestVisible="False"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                              Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+
+                            <Popup Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Fade">
+                                <Border x:Name="DropDownSurface"
+                                        Background="{DynamicResource AppBackground}"
+                                        BorderBrush="{DynamicResource Mint}"
+                                        BorderThickness="1"
+                                        CornerRadius="10"
+                                        Padding="4"
+                                        Margin="0,7,0,10"
+                                        MinWidth="{TemplateBinding ActualWidth}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                        Opacity="0"
+                                        RenderTransformOrigin="0.5,0">
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="#000000" BlurRadius="20"
+                                                          ShadowDepth="7" Opacity="0.42" />
+                                    </Border.Effect>
+                                    <Border.RenderTransform>
+                                        <TransformGroup>
+                                            <ScaleTransform x:Name="DropDownScale" ScaleX="0.98" ScaleY="0.92" />
+                                            <TranslateTransform x:Name="DropDownTranslate" Y="-8" />
+                                        </TransformGroup>
+                                    </Border.RenderTransform>
+                                    <ScrollViewer HorizontalContentAlignment="Stretch"
+                                                  VerticalScrollBarVisibility="Auto"
+                                                  HorizontalScrollBarVisibility="Disabled"
+                                                  PanningMode="VerticalOnly">
+                                        <ScrollViewer.Resources>
+                                            <Style TargetType="ScrollBar"
+                                                   BasedOn="{StaticResource {x:Type ScrollBar}}">
+                                                <Setter Property="Tag" Value="CompactSelect" />
+                                            </Style>
+                                        </ScrollViewer.Resources>
+                                        <ItemsPresenter HorizontalAlignment="Stretch" />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="ToggleButton" Property="BorderBrush" Value="{DynamicResource Mint}" />
+                            </Trigger>
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Setter TargetName="ToggleButton" Property="BorderBrush" Value="{DynamicResource Mint}" />
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="DropDownSurface"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             From="0" To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="DropDownScale"
+                                                             Storyboard.TargetProperty="ScaleX"
+                                                             From="0.98" To="1" Duration="0:0:0.2"
+                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="DropDownScale"
+                                                             Storyboard.TargetProperty="ScaleY"
+                                                             From="0.92" To="1" Duration="0:0:0.2"
+                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="DropDownTranslate"
+                                                             Storyboard.TargetProperty="Y"
+                                                             From="-8" To="0" Duration="0:0:0.2"
+                                                             EasingFunction="{StaticResource FloatingSurfaceEntranceEase}" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="SelectRoot" Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid Background="{DynamicResource AppBackground}">
@@ -1334,76 +1717,75 @@
                     </StackPanel>
                 </Border>
 
-                <Border x:Name="PassagePickerCard"
-                        Grid.Column="1"
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Button x:Name="StudyChatToggleButton"
+                            Style="{StaticResource ChromeButtonStyle}"
+                            Background="{DynamicResource AppBackground}"
+                            BorderBrush="{DynamicResource StrokeSoft}"
+                            Padding="13,9"
+                            Margin="0,0,10,0"
+                            VerticalAlignment="Center"
+                            Visibility="{Binding Visibility, ElementName=PassagePickerCard}"
+                            ToolTip="Open local study chat"
+                            Click="ToggleStudyChat_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="✦"
+                                       Foreground="{DynamicResource Mint}"
+                                       FontSize="16"
+                                       FontWeight="Black"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="Study chat"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       FontSize="13"
+                                       FontWeight="Bold"
+                                       Margin="8,0,0,0"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="PassagePickerCard"
+                        Style="{StaticResource ChromeButtonStyle}"
                         Background="{DynamicResource AppBackground}"
                         BorderBrush="{DynamicResource StrokeSoft}"
-                        BorderThickness="1"
-                        CornerRadius="10"
-                        Padding="10"
+                        Padding="14,9"
                         VerticalAlignment="Center"
-                        Visibility="Collapsed">
-                    <Grid VerticalAlignment="Center">
+                        Visibility="Collapsed"
+                        ToolTip="Choose the scripture passage"
+                        Click="OpenStudyPassageModal_Click">
+                    <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="Passage"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,10,0" />
-                        <ComboBox x:Name="StartChapterSelect"
-                                  Grid.Column="1"
-                                  Width="58"
-                                  Background="{DynamicResource PanelBackground}"
-                                  Foreground="{DynamicResource TextPrimary}"
-                                  BorderBrush="{DynamicResource StrokeSoft}"
-                                  SelectionChanged="PassageSelection_Changed" />
-                        <ComboBox x:Name="StartVerseSelect"
-                                  Grid.Column="2"
-                                  Width="58"
-                                  Margin="6,0,0,0"
-                                  Background="{DynamicResource PanelBackground}"
-                                  Foreground="{DynamicResource TextPrimary}"
-                                  BorderBrush="{DynamicResource StrokeSoft}"
-                                  SelectionChanged="PassageSelection_Changed" />
-                        <TextBlock Text="to"
-                                   Grid.Column="3"
-                                   Foreground="{DynamicResource TextMuted}"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"
-                                   Margin="10,0" />
-                        <ComboBox x:Name="EndChapterSelect"
-                                  Grid.Column="4"
-                                  Width="58"
-                                  Background="{DynamicResource PanelBackground}"
-                                  Foreground="{DynamicResource TextPrimary}"
-                                  BorderBrush="{DynamicResource StrokeSoft}"
-                                  SelectionChanged="PassageSelection_Changed" />
-                        <ComboBox x:Name="EndVerseSelect"
-                                  Grid.Column="5"
-                                  Width="58"
-                                  Margin="6,0,0,0"
-                                  Background="{DynamicResource PanelBackground}"
-                                  Foreground="{DynamicResource TextPrimary}"
-                                  BorderBrush="{DynamicResource StrokeSoft}"
-                                  SelectionChanged="PassageSelection_Changed" />
-                        <TextBlock x:Name="PassagePreviewText"
-                                   Grid.Column="7"
-                                   Foreground="{DynamicResource Mint}"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"
-                                   Margin="12,0,0,0" />
+                        <StackPanel>
+                            <TextBlock Text="PASSAGE"
+                                       Foreground="{DynamicResource TextMuted}"
+                                       FontSize="10"
+                                       FontWeight="Black" />
+                            <TextBlock x:Name="PassagePreviewText"
+                                       Foreground="{DynamicResource Mint}"
+                                       FontSize="14"
+                                       FontWeight="Bold"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="250"
+                                       Margin="0,2,0,0" />
+                        </StackPanel>
+                        <Viewbox Grid.Column="1"
+                                 Width="14" Height="14"
+                                 Margin="14,0,2,0"
+                                 VerticalAlignment="Center">
+                            <Path Data="{StaticResource ChevronRightIcon}"
+                                  Stroke="{DynamicResource TextSecondary}"
+                                  StrokeThickness="2"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round" />
+                        </Viewbox>
                     </Grid>
-                </Border>
+                    </Button>
+                </StackPanel>
             </Grid>
 
             <Border x:Name="ContentShell"
@@ -1734,6 +2116,7 @@
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <ComboBox x:Name="ReminderPresetSelect"
+                                              Style="{StaticResource PolishedComboBoxStyle}"
                                               DisplayMemberPath="Name"
                                               SelectionChanged="ReminderPresetSelect_SelectionChanged"
                                               Margin="0,0,10,10" />
@@ -1795,6 +2178,7 @@
                                                              Margin="0,0,8,0"
                                                              VerticalAlignment="Top" />
                                                     <ComboBox Grid.Column="1"
+                                                              Style="{StaticResource PolishedComboBoxStyle}"
                                                               SelectedValue="{Binding DelayUnit, UpdateSourceTrigger=PropertyChanged}"
                                                               SelectedValuePath="Content"
                                                               Margin="0,0,8,0"
@@ -2057,7 +2441,8 @@
                                             <Button x:Name="RefreshAiModelsButton" Grid.Column="1" Style="{StaticResource ChromeButtonStyle}"
                                                     Padding="12,8" VerticalAlignment="Top" Click="RefreshAiModels_Click" Content="Refresh" />
                                         </Grid>
-                                        <ComboBox x:Name="AiModelComboBox" Margin="0,14,0,0" MinHeight="38"
+                                        <ComboBox x:Name="AiModelComboBox" Margin="0,14,0,0" MinHeight="42"
+                                                  Style="{StaticResource PolishedComboBoxStyle}"
                                                   SelectionChanged="AiModelComboBox_SelectionChanged" />
                                         <TextBlock x:Name="AiModelStatusText" Text="Checking Ollama status..." Foreground="{DynamicResource TextSecondary}"
                                                    FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,9,0,0" />
@@ -2394,12 +2779,10 @@
                                                                            Margin="0,3,0,0" />
                                                             </StackPanel>
                                                             <Button Grid.Column="1"
-                                                                    Style="{StaticResource PanelToolbarButtonStyle}"
+                                                                    Style="{StaticResource MemoryCardRemoveButtonStyle}"
                                                                     Width="34" Height="34"
-                                                                    Padding="0"
                                                                     Content="×"
                                                                     Tag="{Binding}"
-                                                                    Foreground="#111111"
                                                                     ToolTip="Remove passage"
                                                                     Click="MemoryRemovePassage_Click" />
                                                         </Grid>
@@ -2508,7 +2891,7 @@
                                     <RichTextBox x:Name="MemoryPracticeTextView"
                                                  IsReadOnly="True"
                                                  IsReadOnlyCaretVisible="False"
-                                                 IsDocumentEnabled="False"
+                                                 IsDocumentEnabled="True"
                                                  Focusable="False"
                                                  BorderThickness="0"
                                                  Background="Transparent"
@@ -2532,7 +2915,7 @@
                                                 CornerRadius="1.25" />
                                     </Canvas>
                                 </Grid>
-                                <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,20,0,0">
+                                <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,10,0,0">
                                     <TextBlock x:Name="MemoryPracticeFeedback"
                                                Text="Start typing anywhere"
                                                Foreground="{DynamicResource TextMuted}"
@@ -2540,27 +2923,148 @@
                                                FontWeight="SemiBold"
                                                HorizontalAlignment="Center" />
                                     <Border Width="340" Height="4" Background="{DynamicResource AppBackground}"
-                                            CornerRadius="2" Margin="0,10,0,0">
+                                            CornerRadius="2" Margin="0,8,0,0">
                                         <Border x:Name="MemoryTypingProgress"
                                                 Background="{DynamicResource Mint}"
                                                 CornerRadius="2"
                                                 Width="0"
                                                 HorizontalAlignment="Left" />
                                     </Border>
+                                    <StackPanel x:Name="MemoryPracticeUtilityActions"
+                                                Orientation="Horizontal"
+                                                HorizontalAlignment="Center"
+                                                Margin="0,10,0,0">
+                                        <Button x:Name="MemoryPreviousPhaseButton"
+                                                Style="{StaticResource PanelToolbarButtonStyle}"
+                                                Width="38" Height="38" Padding="0"
+                                                ToolTip="Previous phase · more words (Left arrow)"
+                                                Click="MemoryPreviousPhase_Click">
+                                            <Path Data="{StaticResource ChevronLeftIcon}"
+                                                  Stroke="{DynamicResource TextPrimary}"
+                                                  StrokeThickness="2"
+                                                  StrokeStartLineCap="Round"
+                                                  StrokeEndLineCap="Round"
+                                                  Width="13" Height="13" />
+                                        </Button>
+                                        <Button Style="{StaticResource PanelToolbarButtonStyle}"
+                                                Width="38" Height="38" Padding="0"
+                                                Margin="6,0,0,0"
+                                                ToolTip="Restart this attempt"
+                                                Click="MemoryRestartSection_Click">
+                                            <TextBlock Text="↻" FontSize="21" FontWeight="SemiBold" />
+                                        </Button>
+                                        <Button x:Name="MemoryVersePeekButton"
+                                                Style="{StaticResource PanelToolbarButtonStyle}"
+                                                Width="38" Height="38" Padding="0"
+                                                Margin="6,0,0,0"
+                                                ToolTip="Hover to reveal the whole verse"
+                                                MouseEnter="MemoryVersePeek_MouseEnter"
+                                                MouseLeave="MemoryVersePeek_MouseLeave">
+                                            <Grid Width="17" Height="17">
+                                                <Path x:Name="MemoryPeekClosedEye"
+                                                      Data="{StaticResource EyeOffIcon}"
+                                                      Stroke="{DynamicResource TextPrimary}"
+                                                      StrokeThickness="1.8"
+                                                      StrokeStartLineCap="Round"
+                                                      StrokeEndLineCap="Round"
+                                                      StrokeLineJoin="Round"
+                                                      Stretch="Uniform" />
+                                                <Path x:Name="MemoryPeekOpenEye"
+                                                      Data="{StaticResource EyeOpenIcon}"
+                                                      Stroke="{DynamicResource Mint}"
+                                                      StrokeThickness="1.8"
+                                                      StrokeStartLineCap="Round"
+                                                      StrokeEndLineCap="Round"
+                                                      StrokeLineJoin="Round"
+                                                      Stretch="Uniform"
+                                                      Visibility="Collapsed" />
+                                            </Grid>
+                                        </Button>
+                                        <Button x:Name="MemoryNextPhaseButton"
+                                                Style="{StaticResource PanelToolbarButtonStyle}"
+                                                Width="38" Height="38" Padding="0"
+                                                Margin="6,0,0,0"
+                                                ToolTip="Next phase · fewer words (Right arrow)"
+                                                Click="MemoryNextPhase_Click">
+                                            <Path Data="{StaticResource ChevronRightIcon}"
+                                                  Stroke="{DynamicResource TextPrimary}"
+                                                  StrokeThickness="2"
+                                                  StrokeStartLineCap="Round"
+                                                  StrokeEndLineCap="Round"
+                                                  Width="13" Height="13" />
+                                        </Button>
+                                    </StackPanel>
                                 </StackPanel>
                             </Grid>
 
-                            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
-                                <Button Style="{StaticResource ChromeButtonStyle}"
-                                        Content="Restart section" Padding="16,9"
-                                        Click="MemoryRestartSection_Click" />
-                                <Button Style="{StaticResource ChromeButtonStyle}"
-                                        Content="Show more words" Padding="16,9" Margin="10,0,0,0"
-                                        Click="MemoryShowMoreWords_Click" />
-                                <Button Style="{StaticResource ChromeButtonStyle}"
-                                        Content="Relearn section" Padding="16,9" Margin="10,0,0,0"
-                                        Click="MemoryRelearnSection_Click" />
-                            </StackPanel>
+                            <Grid Grid.Row="2">
+                                <Border x:Name="MemoryConfidenceCheck"
+                                        Visibility="Collapsed"
+                                        Opacity="0"
+                                        MaxWidth="820"
+                                        HorizontalAlignment="Center"
+                                        Background="{DynamicResource PanelBackground}"
+                                        BorderBrush="{DynamicResource Mint}"
+                                        BorderThickness="1"
+                                        CornerRadius="14"
+                                        Padding="16,13"
+                                        RenderTransformOrigin="0.5,1">
+                                    <Border.RenderTransform>
+                                        <TranslateTransform x:Name="MemoryConfidenceTranslate" Y="8" />
+                                    </Border.RenderTransform>
+                                    <StackPanel>
+                                        <Grid Margin="5,0,5,11">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock x:Name="MemoryConfidenceSummary"
+                                                       Foreground="{DynamicResource TextPrimary}"
+                                                       FontSize="14"
+                                                       FontWeight="Black" />
+                                            <TextBlock x:Name="MemoryConfidenceRecommendationText"
+                                                       Grid.Column="1"
+                                                       Foreground="{DynamicResource TextSecondary}"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+                                        <UniformGrid Columns="3">
+                                            <Button x:Name="MemoryAgainButton"
+                                                    Style="{StaticResource MemoryConfidenceButtonStyle}"
+                                                    Content="↻  Again"
+                                                    Click="MemoryAgain_Click" />
+                                            <Button x:Name="MemoryGoodButton"
+                                                    Style="{StaticResource MemoryConfidenceButtonStyle}"
+                                                    Content="✓  Good, Next Phase"
+                                                    Click="MemoryGood_Click" />
+                                            <Button x:Name="MemoryNailedButton"
+                                                    Style="{StaticResource MemoryConfidenceButtonStyle}"
+                                                    Content="🔥  Nailed it, Skip Ahead"
+                                                    Click="MemoryNailed_Click" />
+                                        </UniformGrid>
+                                        <StackPanel Orientation="Horizontal"
+                                                    HorizontalAlignment="Center"
+                                                    Margin="0,11,0,0">
+                                            <TextBlock x:Name="MemoryAttemptPhaseText"
+                                                       Foreground="{DynamicResource TextMuted}"
+                                                       FontSize="11"
+                                                       FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0,0,9,0" />
+                                            <Ellipse x:Name="MemoryAttemptDotOne"
+                                                     Width="7" Height="7" Margin="0,0,5,0"
+                                                     Stroke="{DynamicResource TextMuted}" StrokeThickness="1" />
+                                            <Ellipse x:Name="MemoryAttemptDotTwo"
+                                                     Width="7" Height="7" Margin="0,0,5,0"
+                                                     Stroke="{DynamicResource TextMuted}" StrokeThickness="1" />
+                                            <Ellipse x:Name="MemoryAttemptDotThree"
+                                                     Width="7" Height="7"
+                                                     Stroke="{DynamicResource TextMuted}" StrokeThickness="1" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
                         </Grid>
 
                         <Grid x:Name="MemoryPassageModalOverlay"
@@ -2613,6 +3117,7 @@
                                                    FontWeight="Bold"
                                                    Margin="2,0,0,6" />
                                         <ComboBox x:Name="MemoryModalBookSelect"
+                                                  Style="{StaticResource PolishedComboBoxStyle}"
                                                   Height="44"
                                                   Background="{DynamicResource PanelBackground}"
                                                   Foreground="{DynamicResource TextPrimary}"
@@ -2650,7 +3155,8 @@
                                                     <StackPanel>
                                                         <TextBlock Text="Chapter" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="1,0,0,5" />
                                                         <ComboBox x:Name="MemoryFromChapterSelect"
-                                                                  Height="40"
+                                                                  Style="{StaticResource PolishedComboBoxStyle}"
+                                                                  Height="42"
                                                                   Background="{DynamicResource AppBackground}"
                                                                   Foreground="{DynamicResource TextPrimary}"
                                                                   SelectionChanged="MemoryFromChapterSelect_SelectionChanged" />
@@ -2658,7 +3164,8 @@
                                                     <StackPanel Grid.Column="2">
                                                         <TextBlock Text="Verse" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="1,0,0,5" />
                                                         <ComboBox x:Name="MemoryFromVerseSelect"
-                                                                  Height="40"
+                                                                  Style="{StaticResource PolishedComboBoxStyle}"
+                                                                  Height="42"
                                                                   Background="{DynamicResource AppBackground}"
                                                                   Foreground="{DynamicResource TextPrimary}"
                                                                   SelectionChanged="MemoryModalRange_SelectionChanged" />
@@ -2694,7 +3201,8 @@
                                                     <StackPanel>
                                                         <TextBlock Text="Chapter" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="1,0,0,5" />
                                                         <ComboBox x:Name="MemoryThroughChapterSelect"
-                                                                  Height="40"
+                                                                  Style="{StaticResource PolishedComboBoxStyle}"
+                                                                  Height="42"
                                                                   Background="{DynamicResource AppBackground}"
                                                                   Foreground="{DynamicResource TextPrimary}"
                                                                   SelectionChanged="MemoryThroughChapterSelect_SelectionChanged" />
@@ -2702,7 +3210,8 @@
                                                     <StackPanel Grid.Column="2">
                                                         <TextBlock Text="Verse" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="1,0,0,5" />
                                                         <ComboBox x:Name="MemoryThroughVerseSelect"
-                                                                  Height="40"
+                                                                  Style="{StaticResource PolishedComboBoxStyle}"
+                                                                  Height="42"
                                                                   Background="{DynamicResource AppBackground}"
                                                                   Foreground="{DynamicResource TextPrimary}"
                                                                   SelectionChanged="MemoryModalRange_SelectionChanged" />
@@ -2936,6 +3445,7 @@
                                             <DataTemplate>
                                                 <Button Style="{StaticResource PaperCardButtonStyle}"
                                                         Click="WorkspaceItem_Click"
+                                                        PreviewMouseRightButtonDown="WorkspaceItem_PreviewMouseRightButtonDown"
                                                         Tag="{Binding}"
                                                         Margin="0,0,18,18">
                                                     <Grid Width="208"
@@ -4455,6 +4965,202 @@
             </Canvas>
         </Grid>
 
+        <Grid x:Name="StudyPassageModalOverlay"
+              Grid.ColumnSpan="2"
+              Panel.ZIndex="950"
+              Background="#B8000000"
+              Visibility="Collapsed"
+              Focusable="True"
+              PreviewKeyDown="StudyPassageModalOverlay_PreviewKeyDown"
+              MouseLeftButtonDown="StudyPassageModalOverlay_MouseLeftButtonDown">
+            <Border x:Name="StudyPassageModalCard"
+                    Style="{StaticResource NoteSurfaceStyle}"
+                    Width="700"
+                    Padding="24"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    RenderTransformOrigin="0.5,0.5">
+                <Border.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="StudyPassageModalScale" ScaleX="0.94" ScaleY="0.94" />
+                        <TranslateTransform x:Name="StudyPassageModalTranslate" Y="10" />
+                    </TransformGroup>
+                </Border.RenderTransform>
+                <StackPanel>
+                    <Grid Margin="0,0,0,20">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Choose a passage"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       FontSize="23"
+                                       FontWeight="Black" />
+                            <TextBlock Text="Set the scripture range for this Bible study."
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       FontSize="13"
+                                       Margin="0,4,0,0" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Style="{StaticResource PanelToolbarButtonStyle}"
+                                Width="38" Height="38" Padding="0"
+                                Content="×"
+                                ToolTip="Close"
+                                Click="CloseStudyPassageModal_Click" />
+                    </Grid>
+
+                    <Border Background="{DynamicResource PanelBackground}"
+                            CornerRadius="14"
+                            Padding="14,11"
+                            Margin="0,0,0,18">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="BOOK"
+                                       Foreground="{DynamicResource Mint}"
+                                       FontSize="11"
+                                       FontWeight="Black"
+                                       VerticalAlignment="Center" />
+                            <TextBlock x:Name="StudyPassageModalBookText"
+                                       Grid.Column="1"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       FontSize="16"
+                                       FontWeight="Bold"
+                                       Margin="14,0,0,0" />
+                        </Grid>
+                    </Border>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="26" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Background="{DynamicResource PanelBackground}"
+                                CornerRadius="16"
+                                Padding="16">
+                            <StackPanel>
+                                <TextBlock Text="FROM"
+                                           Foreground="{DynamicResource Mint}"
+                                           FontSize="11"
+                                           FontWeight="Black"
+                                           Margin="0,0,0,12" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="10" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Chapter"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   FontSize="11" Margin="1,0,0,5" />
+                                        <ComboBox x:Name="StartChapterSelect"
+                                                  Style="{StaticResource PolishedComboBoxStyle}"
+                                                  Height="42"
+                                                  Background="{DynamicResource AppBackground}"
+                                                  SelectionChanged="PassageSelection_Changed" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Verse"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   FontSize="11" Margin="1,0,0,5" />
+                                        <ComboBox x:Name="StartVerseSelect"
+                                                  Style="{StaticResource PolishedComboBoxStyle}"
+                                                  Height="42"
+                                                  Background="{DynamicResource AppBackground}"
+                                                  SelectionChanged="PassageSelection_Changed" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Grid.Column="1"
+                                   Text="→"
+                                   Foreground="{DynamicResource Mint}"
+                                   FontSize="18"
+                                   FontWeight="Black"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+
+                        <Border Grid.Column="2"
+                                Background="{DynamicResource PanelBackground}"
+                                CornerRadius="16"
+                                Padding="16">
+                            <StackPanel>
+                                <TextBlock Text="THROUGH"
+                                           Foreground="{DynamicResource Mint}"
+                                           FontSize="11"
+                                           FontWeight="Black"
+                                           Margin="0,0,0,12" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="10" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Chapter"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   FontSize="11" Margin="1,0,0,5" />
+                                        <ComboBox x:Name="EndChapterSelect"
+                                                  Style="{StaticResource PolishedComboBoxStyle}"
+                                                  Height="42"
+                                                  Background="{DynamicResource AppBackground}"
+                                                  SelectionChanged="PassageSelection_Changed" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Verse"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   FontSize="11" Margin="1,0,0,5" />
+                                        <ComboBox x:Name="EndVerseSelect"
+                                                  Style="{StaticResource PolishedComboBoxStyle}"
+                                                  Height="42"
+                                                  Background="{DynamicResource AppBackground}"
+                                                  SelectionChanged="PassageSelection_Changed" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <Border Background="{DynamicResource PanelBackground}"
+                            CornerRadius="14"
+                            Padding="14,11"
+                            Margin="0,18,0,0">
+                        <StackPanel>
+                            <TextBlock Text="PASSAGE PREVIEW"
+                                       Foreground="{DynamicResource TextMuted}"
+                                       FontSize="10"
+                                       FontWeight="Black" />
+                            <TextBlock x:Name="StudyPassageModalPreviewText"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       FontSize="15"
+                                       FontWeight="Bold"
+                                       Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                Margin="0,20,0,0">
+                        <Button Style="{StaticResource ChromeButtonStyle}"
+                                Content="Cancel"
+                                Padding="18,10"
+                                Click="CloseStudyPassageModal_Click" />
+                        <Button Style="{StaticResource AccentButtonStyle}"
+                                Content="Apply passage"
+                                Padding="20,10"
+                                Margin="10,0,0,0"
+                                Click="ApplyStudyPassageModal_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
         <Popup x:Name="SelectionActionPopup"
                AllowsTransparency="True"
                Placement="MousePoint"
@@ -4509,6 +5215,55 @@
                             ToolTip="Delete note" MouseEnter="SelectionActionButton_MouseEnter" Click="SelectionDeleteNote_Click">
                         <TextBlock Text="−" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Button>
+            </Canvas>
+        </Popup>
+
+        <Popup x:Name="WorkspaceItemActionPopup"
+               AllowsTransparency="True"
+               Placement="MousePoint"
+               HorizontalOffset="-18"
+               VerticalOffset="-35"
+               StaysOpen="False"
+               PopupAnimation="Fade"
+               Closed="WorkspaceItemActionPopup_Closed">
+            <Canvas x:Name="WorkspaceItemActionMenuRoot"
+                    Width="112" Height="78" Margin="8" Background="Transparent"
+                    MouseLeave="WorkspaceItemActionMenu_MouseLeave">
+                <Canvas.LayoutTransform>
+                    <ScaleTransform ScaleX="0.75" ScaleY="0.75" />
+                </Canvas.LayoutTransform>
+                <Path Data="M 30,35 C 48,35 72,42 91,55"
+                      Stroke="{DynamicResource AppBackground}"
+                      StrokeThickness="46"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round">
+                    <Path.Effect>
+                        <DropShadowEffect Color="#000000" BlurRadius="18" ShadowDepth="5" Opacity="0.42" />
+                    </Path.Effect>
+                </Path>
+                <Button x:Name="WorkspaceItemRenameButton"
+                        Style="{StaticResource SelectionActionButtonStyle}"
+                        Width="38" Height="38"
+                        Canvas.Left="10" Canvas.Top="15"
+                        Background="{DynamicResource PanelBackground}"
+                        ToolTip="Rename"
+                        MouseEnter="WorkspaceItemActionButton_MouseEnter"
+                        Click="WorkspaceItemRename_Click">
+                    <TextBlock Text="✎" FontSize="17"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+                <Button x:Name="WorkspaceItemDeleteButton"
+                        Style="{StaticResource SelectionActionButtonStyle}"
+                        Width="38" Height="38"
+                        Canvas.Left="54" Canvas.Top="27"
+                        Background="{DynamicResource PanelBackground}"
+                        ToolTip="Delete"
+                        MouseEnter="WorkspaceItemActionButton_MouseEnter"
+                        Click="WorkspaceItemDelete_Click">
+                    <TextBlock Text="−" FontSize="20" FontWeight="Black"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
             </Canvas>
         </Popup>
 
