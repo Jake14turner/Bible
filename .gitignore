@@ -34,3 +34,11 @@ artifacts/
 *.bak
 
 .codex_obj/
+
+# Licensed Bible import secrets and resumable temporary data
+# The final LicensedData/NASB1995/nasb1995.json is intentionally eligible for
+# this private, personal-use-only repository. Never make the repository public.
+/nasb1995.json
+/Bible Study App/nasb1995.json
+**/.api-bible-import/
+LicensedData/**/*.tmp

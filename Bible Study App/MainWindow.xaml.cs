@@ -22,6 +22,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using Ellipse = System.Windows.Shapes.Ellipse;
 
 namespace Bible_Study_App;
 
@@ -112,6 +113,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _slashCommandRefreshTimer;
     private readonly DispatcherTimer _workspaceSaveTimer;
     private readonly DispatcherTimer _toastTimer;
+    private readonly DispatcherTimer _scheduledNotificationExpiryTimer;
     private readonly Dictionary<ScrollViewer, DispatcherTimer> _scrollBarRevealTimers = new();
     private readonly string _workspaceFilePath;
     private readonly ObservableCollection<DailyStudyEntry> _todayEditedStudies = new();
@@ -130,16 +132,22 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, GreekLexiconEntry> _greekLexiconByStrong = new(StringComparer.OrdinalIgnoreCase);
     private static readonly GreekLexiconEntry EmptyGreekLexiconEntry = new(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
     private enum DefinitionLineKind { Lead, Main, Sub }
+    private enum MemoryPracticeMode { Typing, Visual }
     private sealed record DefinitionLine(DefinitionLineKind Kind, string Marker, string Text);
     private sealed record VerseReference(string DisplayText, string BookName, int Chapter, int Verse);
     private sealed record SelectionSegment(Control Target, string SourceKey, int Start, int Length, string Text);
     private enum MovablePanelKind { Editor, Scripture, Strongs }
     private enum PanelPreset { Top, Left, Right, Bottom, Float }
+    [Flags]
+    private enum ExtraPanelResizeEdges { None = 0, Left = 1, Top = 2, Right = 4, Bottom = 8 }
+    private sealed record ExtraPanelResizeHandle(ExtraStudyPanelState State, ExtraPanelResizeEdges Edges);
     private static readonly Brush PanelPresetIdleBrush = BrushFrom("#E6DDAA");
     private static readonly Brush PanelPresetIdleBorderBrush = BrushFrom("#111111");
     private static readonly Brush PanelPresetActiveBrush = BrushFrom("#B7C98B");
     private static readonly Brush PanelPresetActiveBorderBrush = BrushFrom("#606C38");
+    private string _selectedBibleVersion = "NASB1995";
     private string _scriptureTranslationLabel = "ASV";
+    private string _scriptureCopyrightNotice = string.Empty;
     private string? _scriptureVisibleBookName;
     private int? _scriptureVisibleChapter;
     private BibleBook? _selectedBook;
@@ -183,6 +191,7 @@ public partial class MainWindow : Window
     private bool _strongsEnabled;
     private bool _greekLexiconLoaded;
     private bool _isRefreshingAiModels;
+    private bool _isSyncingAiModelSelection;
     private bool _suppressRenameCommit;
     private GridLength _scripturePanelVisibleWidth = new(440);
     private GridLength _strongsPanelVisibleWidth = new(330);
@@ -216,6 +225,10 @@ public partial class MainWindow : Window
     private Point _extraPanelDragStartOffset;
     private Rect _extraPanelResizeStartBounds;
     private Point _extraPanelResizeStartPointer;
+    private Rect _extraPanelResizePendingBounds;
+    private ExtraPanelResizeEdges _extraPanelResizeEdges;
+    private CacheMode? _extraPanelResizeOriginalCacheMode;
+    private bool _extraPanelResizeRenderSubscribed;
     private PanelPreset _scripturePanelPreset = PanelPreset.Right;
     private PanelPreset _strongsPanelPreset = PanelPreset.Right;
     private int _topPanelZIndex = 130;
@@ -225,6 +238,7 @@ public partial class MainWindow : Window
     private int _selectionLength;
     private string _selectionText = string.Empty;
     private string _lastStudyContextSelectionText = string.Empty;
+    private string _lastStudyContextSelectionSourceKey = string.Empty;
     private TextRange? _selectedRichTextRange;
     private readonly DispatcherTimer _savedNoteCloseTimer;
     private TextAnnotationState? _savedNoteAnnotation;
@@ -254,6 +268,8 @@ public partial class MainWindow : Window
     private MemoryConfidenceChoice _recommendedMemoryChoice = MemoryConfidenceChoice.Good;
     private int _memorySectionGeneration;
     private bool _isUpdatingMemoryRange;
+    private MemoryPracticeMode _memoryPracticeMode = MemoryPracticeMode.Typing;
+    private bool _memoryVisualTextVisible;
 
     public ObservableCollection<BibleBook> BibleBooks { get; } = new();
     public ObservableCollection<BibleBook> OldTestamentBooks { get; } = new();
@@ -322,6 +338,8 @@ public partial class MainWindow : Window
             Interval = TimeSpan.FromSeconds(2.4)
         };
         _toastTimer.Tick += ToastTimer_Tick;
+        _scheduledNotificationExpiryTimer = new DispatcherTimer(DispatcherPriority.Background);
+        _scheduledNotificationExpiryTimer.Tick += ScheduledNotificationExpiryTimer_Tick;
         _workspaceFilePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Bible Study Studio",
@@ -340,6 +358,8 @@ public partial class MainWindow : Window
         MemoryPassageItems.ItemsSource = _scriptureMemoryItems;
         LoadWorkspaceState();
         LoadScriptureText();
+        RefreshSavedMemoryPassageTranslations();
+        UpdateBibleVersionSettingsUi();
         InitializeMemorySelectors();
         LoadTagntData();
         WorkspaceCountText.Text = $"{BibleBooks.Count} books ready";
@@ -360,6 +380,7 @@ public partial class MainWindow : Window
         StopStudyEditorSmoothScroll();
         StopTodaySmoothScroll();
         StopScheduledMessagesSmoothScroll();
+        _scheduledNotificationExpiryTimer.Stop();
         StopStrongsSmoothScroll();
         StopPanelDragRendering();
         CompleteExtraPanelDrag(save: false);
@@ -382,6 +403,11 @@ public partial class MainWindow : Window
         if (_resizingPanelKind is not null)
         {
             ApplyPendingPanelResize(updateAvoidance: false);
+        }
+
+        if (_resizingExtraPanel is not null)
+        {
+            CompleteExtraPanelResize(save: false);
         }
 
         SnapshotCurrentStudyPanelGeometry();
@@ -518,6 +544,7 @@ public partial class MainWindow : Window
                 return;
             }
 
+            _selectedBibleVersion = NormalizeBibleVersion(state.SelectedBibleVersion);
             RestoreWindowPlacement(state.WindowPlacement);
             _workspaceByBook.Clear();
             _dailyNotesByDate.Clear();
@@ -558,6 +585,7 @@ public partial class MainWindow : Window
             _scheduledNotifications.Clear();
             _reminderScheduleItems.Clear();
             _reminderPresets.Clear();
+            _selectedBibleVersion = "NASB1995";
             EnsureDefaultReminderSettings();
             LoadDefaultColorSchemes();
             LoadColorSettings(null);
@@ -765,6 +793,7 @@ public partial class MainWindow : Window
                 NewTestamentBooksExpanded = NewTestamentBooksExpander.IsExpanded,
                 ReminderSettings = CreateReminderSettingsState(),
                 ColorSettings = CreateColorSettingsState(),
+                SelectedBibleVersion = _selectedBibleVersion,
                 WindowPlacement = CreateWindowPlacementState()
             };
             var json = JsonSerializer.Serialize(state, new JsonSerializerOptions
@@ -1559,6 +1588,71 @@ public partial class MainWindow : Window
         MemoryPassageItems.Items.Refresh();
     }
 
+    private int RefreshSavedMemoryPassageTranslations()
+    {
+        var refreshedCount = 0;
+        foreach (var passage in _scriptureMemoryItems)
+        {
+            passage.NormalizeLegacyRange();
+            var passageChanged = !string.Equals(
+                passage.Translation,
+                _scriptureTranslationLabel,
+                StringComparison.Ordinal);
+            var existingSections = passage.Sections
+                .GroupBy(section => (section.Chapter, section.Verse))
+                .ToDictionary(group => group.Key, group => group.First());
+            var refreshedSections = new List<ScriptureMemorySectionState>();
+            for (var chapter = passage.StartChapter; chapter <= passage.EndChapter; chapter++)
+            {
+                if (!TryGetChapterVerses(passage.BookName, chapter, out var verses))
+                {
+                    continue;
+                }
+
+                var firstVerse = chapter == passage.StartChapter ? passage.StartVerse : 1;
+                var lastVerse = chapter == passage.EndChapter
+                    ? Math.Min(passage.EndVerse, verses.Count)
+                    : verses.Count;
+                for (var verse = firstVerse; verse <= lastVerse; verse++)
+                {
+                    var latestText = verses[verse - 1].Trim();
+                    if (existingSections.TryGetValue((chapter, verse), out var existing))
+                    {
+                        passageChanged |= !string.Equals(existing.Text, latestText, StringComparison.Ordinal);
+                        existing.Text = latestText;
+                        refreshedSections.Add(existing);
+                    }
+                    else
+                    {
+                        passageChanged = true;
+                        refreshedSections.Add(new ScriptureMemorySectionState
+                        {
+                            Chapter = chapter,
+                            Verse = verse,
+                            Text = latestText
+                        });
+                    }
+                }
+            }
+
+            if (refreshedSections.Count == 0)
+            {
+                continue;
+            }
+
+            passageChanged |= passage.Sections.Count != refreshedSections.Count;
+            passage.Sections.Clear();
+            passage.Sections.AddRange(refreshedSections);
+            passage.Translation = _scriptureTranslationLabel;
+            if (passageChanged)
+            {
+                refreshedCount++;
+            }
+        }
+
+        return refreshedCount;
+    }
+
     private void MemoryRemovePassage_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: ScriptureMemoryState item })
@@ -1605,22 +1699,52 @@ public partial class MainWindow : Window
         _memoryTypedText = string.Empty;
         _memoryTypedErrors.Clear();
         _memoryRevealAllWords = false;
+        _memoryVisualTextVisible = false;
         _memorySessionComplete = false;
         _memoryAwaitingConfidenceChoice = false;
         _memoryAttemptStartedAt = DateTimeOffset.Now;
         _memoryAttemptBackspaces = 0;
         MemoryConfidenceCheck.Visibility = Visibility.Collapsed;
         MemoryConfidenceCheck.Opacity = 0;
-        MemoryPracticeUtilityActions.Visibility = Visibility.Visible;
         var section = _activeMemoryPassage.Sections[sectionIndex];
+        MemoryPracticeReference.Text = $"{_activeMemoryPassage.BookName} {section.Chapter}:{section.Verse}";
+        MemoryPracticeSectionProgress.Text = $"{sectionIndex + 1} / {_activeMemoryPassage.Sections.Count}";
+        UpdateMemoryPracticeModeButtons();
+
+        if (_memoryPracticeMode == MemoryPracticeMode.Visual)
+        {
+            MemoryPracticeUtilityActions.Visibility = Visibility.Collapsed;
+            MemoryVisualActions.Visibility = Visibility.Visible;
+            MemoryTypingProgressTrack.Visibility = Visibility.Collapsed;
+            MemoryPracticeTextView.IsHitTestVisible = false;
+            MemorySmoothCaret.Visibility = Visibility.Collapsed;
+            var hasMultipleVerses = _activeMemoryPassage.Sections.Count > 1;
+            MemoryVisualPreviousVerseButton.Visibility = hasMultipleVerses ? Visibility.Visible : Visibility.Collapsed;
+            MemoryVisualNextVerseButton.Visibility = hasMultipleVerses ? Visibility.Visible : Visibility.Collapsed;
+            MemoryVisualPreviousVerseButton.IsEnabled = sectionIndex > 0;
+            MemoryVisualNextVerseButton.IsEnabled = sectionIndex + 1 < _activeMemoryPassage.Sections.Count;
+            MemoryPracticeStage.Text = $"Visual mode · {_activeMemoryPassage.Translation}";
+            RenderVisualMemoryPracticeText();
+            if (animate)
+            {
+                MemoryPracticeTextView.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(240))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                });
+            }
+            return;
+        }
+
+        MemoryPracticeUtilityActions.Visibility = Visibility.Visible;
+        MemoryVisualActions.Visibility = Visibility.Collapsed;
+        MemoryTypingProgressTrack.Visibility = Visibility.Visible;
+        MemoryPracticeTextView.IsHitTestVisible = true;
         MemoryPreviousPhaseButton.IsEnabled = section.CueLevel > 0;
         MemoryNextPhaseButton.IsEnabled = section.CueLevel < 4;
         MemoryVersePeekButton.IsEnabled = section.CueLevel > 0;
         MemoryPeekClosedEye.Visibility = Visibility.Visible;
         MemoryPeekOpenEye.Visibility = Visibility.Collapsed;
-        MemoryPracticeReference.Text = $"{_activeMemoryPassage.BookName} {section.Chapter}:{section.Verse}";
         MemoryPracticeStage.Text = $"{ScriptureMemoryState.GetStageLabel(section.CueLevel)} · {_activeMemoryPassage.Translation}";
-        MemoryPracticeSectionProgress.Text = $"{sectionIndex + 1} / {_activeMemoryPassage.Sections.Count}";
         MemoryPracticeFeedback.Text = "Start typing anywhere";
         RenderMemoryPracticeText(animateCaret: false);
         if (animate)
@@ -1640,6 +1764,106 @@ public partial class MainWindow : Window
         RefreshMemoryLibrary();
     }
 
+    private void MemoryPracticeMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string modeName } || _activeMemoryPassage is null)
+        {
+            return;
+        }
+
+        _memoryPracticeMode = string.Equals(modeName, "Visual", StringComparison.OrdinalIgnoreCase)
+            ? MemoryPracticeMode.Visual
+            : MemoryPracticeMode.Typing;
+        StartMemorySection(_activeMemorySectionIndex, animate: true);
+        Dispatcher.BeginInvoke(() => MemoryPracticeView.Focus(), DispatcherPriority.Input);
+    }
+
+    private void UpdateMemoryPracticeModeButtons()
+    {
+        SetMemoryPracticeModeButtonState(MemoryTypingModeButton, _memoryPracticeMode == MemoryPracticeMode.Typing);
+        SetMemoryPracticeModeButtonState(MemoryVisualModeButton, _memoryPracticeMode == MemoryPracticeMode.Visual);
+    }
+
+    private void SetMemoryPracticeModeButtonState(Button button, bool isSelected)
+    {
+        button.Background = GetResourceBrush(isSelected ? "Mint" : "AppBackground");
+        button.BorderBrush = GetResourceBrush(isSelected ? "TextPrimary" : "StrokeSoft");
+        button.BorderThickness = new Thickness(isSelected ? 1.5 : 1);
+        button.FontWeight = isSelected ? FontWeights.Black : FontWeights.SemiBold;
+    }
+
+    private void RenderVisualMemoryPracticeText()
+    {
+        if (_activeMemoryPassage is null)
+        {
+            return;
+        }
+
+        MemoryPracticeParagraph.Inlines.Clear();
+        _memoryHiddenWordRuns.Clear();
+        _memoryCaretAnchor = null;
+        MemorySmoothCaret.Visibility = Visibility.Collapsed;
+        MemoryTypingProgress.BeginAnimation(FrameworkElement.WidthProperty, null);
+        MemoryTypingProgress.Width = 0;
+        MemoryPracticeParagraph.Inlines.Add(new Run(CurrentMemorySection.Text)
+        {
+            Foreground = _memoryVisualTextVisible
+                ? GetResourceBrush("TextPrimary")
+                : Brushes.Transparent
+        });
+        MemoryVisualHiddenEye.Visibility = _memoryVisualTextVisible ? Visibility.Collapsed : Visibility.Visible;
+        MemoryVisualVisibleEye.Visibility = _memoryVisualTextVisible ? Visibility.Visible : Visibility.Collapsed;
+        MemoryVisualRevealButton.ToolTip = _memoryVisualTextVisible
+            ? "Hide verse (Space)"
+            : "Show verse (Space)";
+        MemoryPracticeFeedback.Text = _memoryVisualTextVisible
+            ? "Press Space to hide the verse again"
+            : "Press Space or the eye to reveal the verse";
+    }
+
+    private void MemoryVisualReveal_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleVisualMemoryText();
+        MemoryPracticeView.Focus();
+    }
+
+    private void ToggleVisualMemoryText()
+    {
+        if (_activeMemoryPassage is null || _memoryPracticeMode != MemoryPracticeMode.Visual)
+        {
+            return;
+        }
+
+        _memoryVisualTextVisible = !_memoryVisualTextVisible;
+        if (_memoryVisualTextVisible)
+        {
+            _activeMemoryPassage.LastPracticedAt = DateTimeOffset.Now;
+            QueueWorkspaceSave();
+        }
+        RenderVisualMemoryPracticeText();
+    }
+
+    private void MemoryVisualPreviousVerse_Click(object sender, RoutedEventArgs e) => MoveVisualMemoryVerse(-1);
+
+    private void MemoryVisualNextVerse_Click(object sender, RoutedEventArgs e) => MoveVisualMemoryVerse(1);
+
+    private void MoveVisualMemoryVerse(int direction)
+    {
+        if (_activeMemoryPassage is null || _memoryPracticeMode != MemoryPracticeMode.Visual || direction == 0)
+        {
+            return;
+        }
+
+        var nextIndex = _activeMemorySectionIndex + Math.Sign(direction);
+        if (nextIndex < 0 || nextIndex >= _activeMemoryPassage.Sections.Count)
+        {
+            return;
+        }
+
+        StartMemorySection(nextIndex, animate: true);
+        Dispatcher.BeginInvoke(() => MemoryPracticeView.Focus(), DispatcherPriority.Input);
+    }
+
     private void MemoryPracticeView_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         MemoryPracticeView.Focus();
@@ -1647,6 +1871,12 @@ public partial class MainWindow : Window
 
     private void MemoryPracticeView_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
+        if (_memoryPracticeMode == MemoryPracticeMode.Visual)
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (_activeMemoryPassage is null || _memorySessionComplete || string.IsNullOrEmpty(e.Text))
         {
             return;
@@ -1675,6 +1905,30 @@ public partial class MainWindow : Window
     {
         if (_activeMemoryPassage is null)
         {
+            return;
+        }
+        if (_memoryPracticeMode == MemoryPracticeMode.Visual)
+        {
+            if (e.Key == Key.Space)
+            {
+                ToggleVisualMemoryText();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Right)
+            {
+                MoveVisualMemoryVerse(1);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Left)
+            {
+                MoveVisualMemoryVerse(-1);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                MemoryPracticeBack_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+            }
             return;
         }
         if (e.Key == Key.Back && _memoryTypedText.Length > 0 && !_memorySessionComplete)
@@ -1718,6 +1972,11 @@ public partial class MainWindow : Window
     {
         if (_activeMemoryPassage is null)
         {
+            return;
+        }
+        if (_memoryPracticeMode == MemoryPracticeMode.Visual)
+        {
+            RenderVisualMemoryPracticeText();
             return;
         }
         var section = CurrentMemorySection;
@@ -2523,7 +2782,10 @@ public partial class MainWindow : Window
 
     private void BackOneLevel()
     {
-        if (IsColorThemeSettingsPanelVisible() || IsLocalAiSettingsPanelVisible() || ReminderSettingsPanel.Visibility == Visibility.Visible)
+        if (IsColorThemeSettingsPanelVisible()
+            || IsBibleVersionSettingsPanelVisible()
+            || IsLocalAiSettingsPanelVisible()
+            || ReminderSettingsPanel.Visibility == Visibility.Visible)
         {
             ShowSettings();
             return;
@@ -2634,6 +2896,11 @@ public partial class MainWindow : Window
         RunPageTransition(sender, ShowColorThemeSettings);
     }
 
+    private void BibleVersionSettings_Click(object sender, RoutedEventArgs e)
+    {
+        RunPageTransition(sender, ShowBibleVersionSettings);
+    }
+
     private void LocalAiSettings_Click(object sender, RoutedEventArgs e)
     {
         RunPageTransition(sender, ShowLocalAiSettings);
@@ -2657,6 +2924,50 @@ public partial class MainWindow : Window
         PassagePickerCard.Visibility = Visibility.Collapsed;
         SetActiveNavTab(AppNavTab.Settings);
         RenderBreadcrumbs();
+    }
+
+    private void ShowBibleVersionSettings()
+    {
+        _currentStudy = null;
+        LibraryPanel.Visibility = Visibility.Collapsed;
+        WorkspacePanel.Visibility = Visibility.Collapsed;
+        StudyPanel.Visibility = Visibility.Collapsed;
+        TodayPanel.Visibility = Visibility.Collapsed;
+        ReminderSettingsPanel.Visibility = Visibility.Collapsed;
+        SetSettingsPanelVisibility(Visibility.Collapsed);
+        SetBibleVersionSettingsPanelVisibility(Visibility.Visible);
+        MainHeading.Text = "Bible Version";
+        MainSubheading.Visibility = Visibility.Collapsed;
+        FlattenContentShell();
+        HeaderBackButton.Visibility = Visibility.Visible;
+        WorkspaceStatusCard.Visibility = Visibility.Collapsed;
+        PassagePickerCard.Visibility = Visibility.Collapsed;
+        SetActiveNavTab(AppNavTab.Settings);
+        UpdateBibleVersionSettingsUi();
+        RenderBreadcrumbs();
+    }
+
+    private void BibleVersionOption_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string requestedVersion })
+        {
+            return;
+        }
+
+        requestedVersion = NormalizeBibleVersion(requestedVersion);
+        _selectedBibleVersion = requestedVersion;
+        LoadScriptureText();
+        var refreshedPassages = RefreshSavedMemoryPassageTranslations();
+        UpdateBibleVersionSettingsUi();
+        RefreshMemoryLibrary();
+        if (_activeMemoryPassage is { Sections.Count: > 0 } && MemoryPracticeView.IsVisible)
+        {
+            StartMemorySection(Math.Clamp(_activeMemorySectionIndex, 0, _activeMemoryPassage.Sections.Count - 1), animate: false);
+        }
+        QueueWorkspaceSave();
+        ShowToast(refreshedPassages > 0
+            ? $"Bible version set to {_scriptureTranslationLabel} · {refreshedPassages} memory passage{(refreshedPassages == 1 ? string.Empty : "s")} updated"
+            : $"Bible version set to {_scriptureTranslationLabel}");
     }
 
     private void ShowLocalAiSettings()
@@ -2752,12 +3063,15 @@ public partial class MainWindow : Window
 
     private void AiModelComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_isRefreshingAiModels || AiModelComboBox.SelectedItem is not string model)
+        if (_isRefreshingAiModels
+            || _isSyncingAiModelSelection
+            || AiModelComboBox.SelectedItem is not string model)
         {
             return;
         }
 
         _selectedAiModel = model;
+        SyncStudyChatModelSelections(model);
         QueueWorkspaceSave();
         ShowToast($"AI model set to {model}");
     }
@@ -2838,6 +3152,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (IsBibleVersionSettingsPanelVisible())
+        {
+            AddBreadcrumb("Settings", BreadcrumbTarget.Settings, null, false);
+            AddBreadcrumb("Bible Version", BreadcrumbTarget.BibleVersionSettings, null, false);
+            return;
+        }
+
         if (IsSettingsPanelVisible())
         {
             AddBreadcrumb("Settings", BreadcrumbTarget.Settings, null, false);
@@ -2869,6 +3190,7 @@ public partial class MainWindow : Window
         }
 
         SetColorThemeSettingsPanelVisibility(Visibility.Collapsed);
+        SetBibleVersionSettingsPanelVisibility(Visibility.Collapsed);
         SetLocalAiSettingsPanelVisibility(Visibility.Collapsed);
     }
 
@@ -2888,6 +3210,19 @@ public partial class MainWindow : Window
     private bool IsColorThemeSettingsPanelVisible()
     {
         return ColorThemeSettingsPanel is not null && ColorThemeSettingsPanel.Visibility == Visibility.Visible;
+    }
+
+    private void SetBibleVersionSettingsPanelVisibility(Visibility visibility)
+    {
+        if (BibleVersionSettingsPanel is not null)
+        {
+            BibleVersionSettingsPanel.Visibility = visibility;
+        }
+    }
+
+    private bool IsBibleVersionSettingsPanelVisible()
+    {
+        return BibleVersionSettingsPanel is not null && BibleVersionSettingsPanel.Visibility == Visibility.Visible;
     }
 
     private void SetLocalAiSettingsPanelVisibility(Visibility visibility)
@@ -2984,6 +3319,9 @@ public partial class MainWindow : Window
             case BreadcrumbTarget.ColorThemeSettings:
                 ShowColorThemeSettings();
                 break;
+            case BreadcrumbTarget.BibleVersionSettings:
+                ShowBibleVersionSettings();
+                break;
             case BreadcrumbTarget.LocalAiSettings:
                 ShowLocalAiSettings();
                 break;
@@ -2995,6 +3333,7 @@ public partial class MainWindow : Window
         _isRestoringStudyPanelGeometry = true;
         _currentStudy = study;
         _lastStudyContextSelectionText = string.Empty;
+        _lastStudyContextSelectionSourceKey = string.Empty;
         TodayPanel.Visibility = Visibility.Collapsed;
         ReminderSettingsPanel.Visibility = Visibility.Collapsed;
         SetSettingsPanelVisibility(Visibility.Collapsed);
@@ -3212,6 +3551,11 @@ public partial class MainWindow : Window
 
     private void RenderScheduledNotifications()
     {
+        if (RemoveDeliveredScheduledNotifications() > 0)
+        {
+            QueueWorkspaceSave();
+        }
+
         _scheduledNotificationDisplays.Clear();
 
         foreach (var notification in _scheduledNotifications
@@ -3238,6 +3582,79 @@ public partial class MainWindow : Window
             ? Visibility.Visible
             : Visibility.Collapsed;
         UpdateCancelScheduledNotificationsButton();
+        ScheduleNextNotificationExpiryCheck();
+    }
+
+    private void ScheduledNotificationExpiryTimer_Tick(object? sender, EventArgs e)
+    {
+        _scheduledNotificationExpiryTimer.Stop();
+        RenderScheduledNotifications();
+    }
+
+    private int RemoveDeliveredScheduledNotifications()
+    {
+        var now = DateTimeOffset.Now;
+        return _scheduledNotifications.RemoveAll(notification =>
+            !notification.Deleted
+            && ResolveScheduledNotificationTime(notification) is { } scheduledFor
+            && scheduledFor <= now);
+    }
+
+    private void ScheduleNextNotificationExpiryCheck()
+    {
+        _scheduledNotificationExpiryTimer.Stop();
+        var now = DateTimeOffset.Now;
+        var nextScheduledTime = _scheduledNotifications
+            .Where(notification => !notification.Deleted)
+            .Select(ResolveScheduledNotificationTime)
+            .Where(scheduledFor => scheduledFor is not null)
+            .Select(scheduledFor => scheduledFor!.Value)
+            .OrderBy(scheduledFor => scheduledFor)
+            .FirstOrDefault();
+        if (nextScheduledTime == default)
+        {
+            return;
+        }
+
+        var remaining = nextScheduledTime - now;
+        _scheduledNotificationExpiryTimer.Interval = remaining <= TimeSpan.Zero
+            ? TimeSpan.FromMilliseconds(100)
+            : remaining > TimeSpan.FromMinutes(1)
+                ? TimeSpan.FromMinutes(1)
+                : remaining;
+        _scheduledNotificationExpiryTimer.Start();
+    }
+
+    private static DateTimeOffset? ResolveScheduledNotificationTime(ScheduledNotificationState notification)
+    {
+        if (notification.ScheduledFor is not null)
+        {
+            return notification.ScheduledFor;
+        }
+
+        var match = Regex.Match(
+            notification.Delivery,
+            @"^\s*(\d+)\s*(minute|minutes|hour|hours|day|days)\s*$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!match.Success || !int.TryParse(match.Groups[1].Value, out var amount) || amount < 1)
+        {
+            return null;
+        }
+
+        try
+        {
+            var unit = match.Groups[2].Value.ToLowerInvariant();
+            notification.ScheduledFor = unit.StartsWith("minute", StringComparison.Ordinal)
+                ? notification.CreatedAt.AddMinutes(amount)
+                : unit.StartsWith("day", StringComparison.Ordinal)
+                    ? notification.CreatedAt.AddDays(amount)
+                    : notification.CreatedAt.AddHours(amount);
+            return notification.ScheduledFor;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return null;
+        }
     }
 
     private void RemoveDeletedScheduledNotification_Click(object sender, RoutedEventArgs e)
@@ -3962,6 +4379,9 @@ public partial class MainWindow : Window
 
     private void LoadScriptureText()
     {
+        _scriptureTextByBookChapter.Clear();
+        _scriptureCopyrightNotice = string.Empty;
+
         foreach (var dataSource in GetScriptureDataSources())
         {
             if (!File.Exists(dataSource.Path))
@@ -3981,7 +4401,6 @@ public partial class MainWindow : Window
                     continue;
                 }
 
-                _scriptureTextByBookChapter.Clear();
                 foreach (var verse in data.Verses)
                 {
                     if (string.IsNullOrWhiteSpace(verse.BookName) || string.IsNullOrWhiteSpace(verse.Text))
@@ -4011,6 +4430,7 @@ public partial class MainWindow : Window
                 }
 
                 _scriptureTranslationLabel = dataSource.Label;
+                _scriptureCopyrightNotice = data.Metadata?.CopyrightStatement?.Trim() ?? string.Empty;
                 return;
             }
             catch
@@ -4020,14 +4440,62 @@ public partial class MainWindow : Window
         }
     }
 
-    private static IEnumerable<ScriptureDataSource> GetScriptureDataSources()
+    private void UpdateBibleVersionSettingsUi()
     {
-        foreach (var fileName in new[] { "nasb1995.json", "asv.json" })
+        if (Nasb1995VersionButton is null
+            || AsvVersionButton is null
+            || Nasb1995SelectedBadge is null
+            || AsvSelectedBadge is null
+            || BibleVersionStatusText is null)
+        {
+            return;
+        }
+
+        var nasbSelected = string.Equals(_selectedBibleVersion, "NASB1995", StringComparison.OrdinalIgnoreCase);
+        SetBibleVersionButtonState(Nasb1995VersionButton, Nasb1995SelectedBadge, nasbSelected);
+        SetBibleVersionButtonState(AsvVersionButton, AsvSelectedBadge, !nasbSelected);
+
+        var requestedLabel = nasbSelected ? "NASB 1995" : "ASV";
+        BibleVersionStatusText.Text = string.Equals(requestedLabel, _scriptureTranslationLabel, StringComparison.OrdinalIgnoreCase)
+            ? $"Currently using {_scriptureTranslationLabel}."
+            : $"{requestedLabel} could not be loaded. Currently using {_scriptureTranslationLabel}.";
+    }
+
+    private void SetBibleVersionButtonState(Button button, Border badge, bool isSelected)
+    {
+        button.Background = GetResourceBrush(isSelected ? "Mint" : "PanelBackground");
+        button.BorderBrush = GetResourceBrush(isSelected ? "TextPrimary" : "Mint");
+        button.BorderThickness = new Thickness(isSelected ? 2 : 1);
+        badge.Visibility = isSelected ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private static string NormalizeBibleVersion(string? version)
+    {
+        return string.Equals(version, "ASV", StringComparison.OrdinalIgnoreCase)
+            ? "ASV"
+            : "NASB1995";
+    }
+
+    private IEnumerable<ScriptureDataSource> GetScriptureDataSources()
+    {
+        var fileNames = string.Equals(_selectedBibleVersion, "ASV", StringComparison.OrdinalIgnoreCase)
+            ? new[] { "asv.json", "nasb1995.json" }
+            : new[] { "nasb1995.json", "asv.json" };
+
+        foreach (var fileName in fileNames)
         {
             var label = fileName.Equals("nasb1995.json", StringComparison.OrdinalIgnoreCase)
-                ? "NASB1995"
+                ? "NASB 1995"
                 : "ASV";
 
+            yield return new ScriptureDataSource(
+                label,
+                Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Bible Study Studio",
+                    "LicensedData",
+                    "NASB1995",
+                    fileName));
             yield return new ScriptureDataSource(
                 label,
                 Path.Combine(@"C:\Users\jake1\OneDrive\Desktop\Bible Study App", fileName));
@@ -4037,6 +4505,9 @@ public partial class MainWindow : Window
             var cursor = new DirectoryInfo(AppContext.BaseDirectory);
             while (cursor is not null)
             {
+                yield return new ScriptureDataSource(
+                    label,
+                    Path.Combine(cursor.FullName, "LicensedData", "NASB1995", fileName));
                 yield return new ScriptureDataSource(label, Path.Combine(cursor.FullName, fileName));
                 cursor = cursor.Parent;
             }
@@ -5391,6 +5862,20 @@ public partial class MainWindow : Window
             _scriptureParagraphsByVerse[verse.VerseNumber] = paragraph;
         }
 
+        if (!string.IsNullOrWhiteSpace(_scriptureCopyrightNotice))
+        {
+            ScriptureDocument.Blocks.Add(new Paragraph(new Run(_scriptureCopyrightNotice))
+            {
+                Margin = new Thickness(6, 18, 6, 4),
+                Padding = new Thickness(0, 12, 0, 0),
+                BorderBrush = GetResourceBrush("PanelBackground"),
+                BorderThickness = new Thickness(0, 1, 0, 0),
+                Foreground = GetResourceBrush("PanelBackground"),
+                FontSize = 10,
+                LineHeight = 15
+            });
+        }
+
         ApplySavedRichTextAnnotations(ScriptureTextView);
     }
 
@@ -5677,19 +6162,24 @@ public partial class MainWindow : Window
             {
                 existing.Title = notification.Title;
                 existing.Delivery = notification.Delivery;
+                existing.CreatedAt = DateTimeOffset.Now;
+                existing.ScheduledFor = null;
                 existing.Deleted = false;
                 existing.DeletedAt = null;
+                ResolveScheduledNotificationTime(existing);
                 continue;
             }
 
-            _scheduledNotifications.Add(new ScheduledNotificationState
+            var scheduledNotification = new ScheduledNotificationState
             {
                 SequenceId = notification.SequenceId,
                 Title = notification.Title,
                 Delivery = notification.Delivery,
                 CreatedAt = DateTimeOffset.Now,
                 Deleted = false
-            });
+            };
+            ResolveScheduledNotificationTime(scheduledNotification);
+            _scheduledNotifications.Add(scheduledNotification);
         }
     }
 
@@ -5840,6 +6330,29 @@ public partial class MainWindow : Window
         return study.PassageLabel == "No passage selected"
             ? string.Empty
             : $"{root.Name} {study.PassageLabel}";
+    }
+
+    private void SynchronizeLiveStudyNotes(WorkspaceItem study)
+    {
+        foreach (var textBox in FindDescendants<TextBox>(StudyBlockItems))
+        {
+            if (textBox.Tag is StudyBlock block && study.Blocks.Contains(block))
+            {
+                block.Text = textBox.Text;
+            }
+        }
+
+        foreach (var runtime in _extraPanelRuntimes.Values.Where(runtime =>
+                     runtime.State.Kind == ExtraStudyPanelKind.Notes
+                     && study.ExtraPanels.Contains(runtime.State)))
+        {
+            var liveNotes = FindDescendants<TextBox>(runtime.Root)
+                .FirstOrDefault(textBox => ReferenceEquals(textBox.Tag, runtime.State));
+            if (liveNotes is not null)
+            {
+                runtime.State.NotesText = liveNotes.Text;
+            }
+        }
     }
 
     private static string CreateStudyNotesText(WorkspaceItem study)
@@ -6024,6 +6537,7 @@ public partial class MainWindow : Window
         block.Text = textBox.Text;
         _activeStudyBlock = block;
         _activeStudyTextBox = textBox;
+        InvalidateStudyChatSelectionAfterNotesEdit("notes:");
         MarkCurrentStudyEdited();
 
         TryAutoCorrectPreviousWord(textBox, block, e.Key);
@@ -7343,6 +7857,8 @@ public partial class MainWindow : Window
         _selectionLength = first.Length;
         _selectionText = string.Join(Environment.NewLine, _selectionSegments.Select(segment => segment.Text));
         _lastStudyContextSelectionText = _selectionText;
+        _lastStudyContextSelectionSourceKey = "notes:multi";
+        UpdateStudyChatContextBanners();
         _selectedRichTextRange = null;
         SelectionPasteButton.Visibility = Visibility.Collapsed;
         SelectionDeleteHighlightButton.Visibility = FindSelectedAnnotations().Any(annotation => annotation.IsHighlighted) ? Visibility.Visible : Visibility.Collapsed;
@@ -7504,8 +8020,9 @@ public partial class MainWindow : Window
             _selectionStart = textBox.SelectionStart;
             _selectionLength = textBox.SelectionLength;
             _selectionText = textBox.SelectedText;
-            _lastStudyContextSelectionText = _selectionText;
             _selectionSourceKey = GetSelectionSourceKey(textBox);
+            _lastStudyContextSelectionText = _selectionText;
+            _lastStudyContextSelectionSourceKey = _selectionSourceKey;
         }
         else if (control is RichTextBox richTextBox && !richTextBox.Selection.IsEmpty)
         {
@@ -7519,10 +8036,11 @@ public partial class MainWindow : Window
             _selectionTarget = richTextBox;
             _selectedRichTextRange = range;
             _selectionText = range.Text;
-            _lastStudyContextSelectionText = _selectionText;
             _selectionStart = new TextRange(richTextBox.Document.ContentStart, range.Start).Text.Length;
             _selectionLength = range.Text.Length;
             _selectionSourceKey = GetSelectionSourceKey(richTextBox);
+            _lastStudyContextSelectionText = _selectionText;
+            _lastStudyContextSelectionSourceKey = _selectionSourceKey;
         }
         else
         {
@@ -7530,6 +8048,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        UpdateStudyChatContextBanners();
         _selectionSegments.Add(new SelectionSegment(_selectionTarget, _selectionSourceKey, _selectionStart, _selectionLength, _selectionText));
 
         var editableNotes = control is TextBox { IsReadOnly: false };
@@ -8571,23 +9090,7 @@ public partial class MainWindow : Window
         Grid.SetRow(content, 1);
         grid.Children.Add(content);
 
-        var resize = new Thumb
-        {
-            Width = 22,
-            Height = 22,
-            Cursor = Cursors.SizeNWSE,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(0, 0, -8, -8),
-            Background = Brushes.Transparent,
-            Tag = state
-        };
-        resize.DragStarted += ExtraPanelResize_DragStarted;
-        resize.DragDelta += ExtraPanelResize_DragDelta;
-        resize.DragCompleted += ExtraPanelResize_DragCompleted;
-        Grid.SetRowSpan(resize, 2);
-        Panel.SetZIndex(resize, 40);
-        grid.Children.Add(resize);
+        AddExtraPanelResizeHandles(grid, state);
 
         root.Child = grid;
         root.PreviewMouseDown += ExtraPanelRoot_PreviewMouseDown;
@@ -8739,8 +9242,56 @@ public partial class MainWindow : Window
     {
         var root = new Grid { Background = GetResourceBrush("AppBackground") };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var connectionBar = new Border
+        {
+            Background = GetResourceBrush("AppBackground"),
+            BorderBrush = GetResourceBrush("StrokeSoft"),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Padding = new Thickness(12, 8, 12, 8)
+        };
+        var connectionGrid = new Grid();
+        connectionGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        connectionGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var connectionStatus = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var statusLight = new Ellipse
+        {
+            Width = 9,
+            Height = 9,
+            Fill = BrushFrom("#C58A2B"),
+            Margin = new Thickness(0, 0, 7, 0)
+        };
+        var statusText = new TextBlock
+        {
+            Text = "Status: Checking...",
+            Foreground = GetResourceBrush("TextSecondary"),
+            FontSize = 11.5,
+            FontWeight = FontWeights.Bold,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        connectionStatus.Children.Add(statusLight);
+        connectionStatus.Children.Add(statusText);
+        connectionGrid.Children.Add(connectionStatus);
+
+        var modelSelector = new ComboBox
+        {
+            Width = 172,
+            MinHeight = 34,
+            Style = (Style)FindResource("PolishedComboBoxStyle"),
+            ToolTip = "Choose the Ollama model for this chat",
+            IsEnabled = false
+        };
+        Grid.SetColumn(modelSelector, 1);
+        connectionGrid.Children.Add(modelSelector);
+        connectionBar.Child = connectionGrid;
+        root.Children.Add(connectionBar);
 
         var contextBanner = new Border
         {
@@ -8752,15 +9303,13 @@ public partial class MainWindow : Window
         var contextText = new TextBlock
         {
             Text = BuildStudyChatContextLabel(_lastStudyContextSelectionText),
-            ToolTip = string.IsNullOrWhiteSpace(_lastStudyContextSelectionText)
-                ? null
-                : _lastStudyContextSelectionText,
             Foreground = GetResourceBrush("TextSecondary"),
             FontSize = 11,
             FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap
         };
         contextBanner.Child = contextText;
+        Grid.SetRow(contextBanner, 1);
         root.Children.Add(contextBanner);
 
         var messages = new StackPanel { Margin = new Thickness(12, 12, 12, 4) };
@@ -8770,7 +9319,7 @@ public partial class MainWindow : Window
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
-        Grid.SetRow(scrollViewer, 1);
+        Grid.SetRow(scrollViewer, 2);
         root.Children.Add(scrollViewer);
 
         var composerBorder = new Border
@@ -8815,16 +9364,40 @@ public partial class MainWindow : Window
         Grid.SetColumn(send, 1);
         composer.Children.Add(send);
         composerBorder.Child = composer;
-        Grid.SetRow(composerBorder, 2);
+        Grid.SetRow(composerBorder, 3);
         root.Children.Add(composerBorder);
 
-        var view = new StudyChatPanelView(state, messages, scrollViewer, input, send, contextText);
+        var view = new StudyChatPanelView(
+            state,
+            messages,
+            scrollViewer,
+            input,
+            send,
+            contextText,
+            modelSelector,
+            statusLight,
+            statusText);
         _studyChatPanelViews[state.Id] = view;
+        modelSelector.ItemsSource = view.AvailableModels;
+        foreach (var model in _availableAiModels)
+        {
+            view.AvailableModels.Add(model);
+        }
+        if (!string.IsNullOrWhiteSpace(_selectedAiModel)
+            && !view.AvailableModels.Contains(_selectedAiModel, StringComparer.OrdinalIgnoreCase))
+        {
+            view.AvailableModels.Add(_selectedAiModel);
+        }
+        modelSelector.SelectedItem = view.AvailableModels.FirstOrDefault(model =>
+            string.Equals(model, _selectedAiModel, StringComparison.OrdinalIgnoreCase));
         send.Tag = view;
         input.Tag = view;
+        modelSelector.Tag = view;
         send.Click += StudyChatSend_Click;
         input.PreviewKeyDown += StudyChatInput_PreviewKeyDown;
+        modelSelector.SelectionChanged += StudyChatModelSelector_SelectionChanged;
         RenderStudyChatMessages(view);
+        _ = RefreshStudyChatConnectionAsync(view);
         return root;
     }
 
@@ -8869,7 +9442,273 @@ public partial class MainWindow : Window
             view.Messages.Children.Add(bubble);
         }
 
+        if (view.IsSending && view.IsConnected)
+        {
+            view.Messages.Children.Add(CreateStudyChatLoadingBubble());
+        }
+
         Dispatcher.BeginInvoke(view.ScrollViewer.ScrollToEnd, DispatcherPriority.Background);
+    }
+
+    private Border CreateStudyChatLoadingBubble()
+    {
+        var dots = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        for (var index = 0; index < 3; index++)
+        {
+            var translate = new TranslateTransform();
+            var dot = new Ellipse
+            {
+                Width = 7,
+                Height = 7,
+                Fill = GetResourceBrush("Mint"),
+                Margin = new Thickness(index == 0 ? 0 : 5, 0, 0, 0),
+                Opacity = 0.35,
+                RenderTransform = translate
+            };
+            var delay = TimeSpan.FromMilliseconds(index * 130);
+            dot.BeginAnimation(OpacityProperty, new DoubleAnimation(0.35, 1, TimeSpan.FromMilliseconds(390))
+            {
+                BeginTime = delay,
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+            });
+            translate.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(1.5, -3.5, TimeSpan.FromMilliseconds(390))
+            {
+                BeginTime = delay,
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+            });
+            dots.Children.Add(dot);
+        }
+
+        return new Border
+        {
+            Background = GetResourceBrush("PanelBackground"),
+            BorderBrush = GetResourceBrush("StrokeSoft"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(13, 12, 13, 12),
+            Margin = new Thickness(0, 0, 28, 9),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Child = dots
+        };
+    }
+
+    private async Task<bool> RefreshStudyChatConnectionAsync(StudyChatPanelView view)
+    {
+        view.ConnectionRefreshTask ??= RefreshStudyChatConnectionCoreAsync(view);
+        var refreshTask = view.ConnectionRefreshTask;
+        try
+        {
+            return await refreshTask;
+        }
+        finally
+        {
+            if (ReferenceEquals(view.ConnectionRefreshTask, refreshTask))
+            {
+                view.ConnectionRefreshTask = null;
+            }
+        }
+    }
+
+    private void AddExtraPanelResizeHandles(Grid grid, ExtraStudyPanelState state)
+    {
+        AddExtraPanelResizeHandle(grid, state, ExtraPanelResizeEdges.Left,
+            width: 12, height: null, HorizontalAlignment.Left, VerticalAlignment.Stretch,
+            Cursors.SizeWE, new Thickness(-6, 0, 0, 0));
+        AddExtraPanelResizeHandle(grid, state, ExtraPanelResizeEdges.Right,
+            width: 12, height: null, HorizontalAlignment.Right, VerticalAlignment.Stretch,
+            Cursors.SizeWE, new Thickness(0, 0, -6, 0));
+        AddExtraPanelResizeHandle(grid, state, ExtraPanelResizeEdges.Top,
+            width: null, height: 12, HorizontalAlignment.Stretch, VerticalAlignment.Top,
+            Cursors.SizeNS, new Thickness(0, -6, 0, 0));
+        AddExtraPanelResizeHandle(grid, state, ExtraPanelResizeEdges.Bottom,
+            width: null, height: 12, HorizontalAlignment.Stretch, VerticalAlignment.Bottom,
+            Cursors.SizeNS, new Thickness(0, 0, 0, -6));
+        AddExtraPanelResizeHandle(grid, state, ExtraPanelResizeEdges.Left | ExtraPanelResizeEdges.Top,
+            width: 20, height: 20, HorizontalAlignment.Left, VerticalAlignment.Top,
+            Cursors.SizeNWSE, new Thickness(-10, -10, 0, 0));
+        AddExtraPanelResizeHandle(grid, state, ExtraPanelResizeEdges.Right | ExtraPanelResizeEdges.Top,
+            width: 20, height: 20, HorizontalAlignment.Right, VerticalAlignment.Top,
+            Cursors.SizeNESW, new Thickness(0, -10, -10, 0));
+        AddExtraPanelResizeHandle(grid, state, ExtraPanelResizeEdges.Left | ExtraPanelResizeEdges.Bottom,
+            width: 20, height: 20, HorizontalAlignment.Left, VerticalAlignment.Bottom,
+            Cursors.SizeNESW, new Thickness(-10, 0, 0, -10));
+        AddExtraPanelResizeHandle(grid, state, ExtraPanelResizeEdges.Right | ExtraPanelResizeEdges.Bottom,
+            width: 20, height: 20, HorizontalAlignment.Right, VerticalAlignment.Bottom,
+            Cursors.SizeNWSE, new Thickness(0, 0, -10, -10));
+    }
+
+    private void AddExtraPanelResizeHandle(
+        Grid grid,
+        ExtraStudyPanelState state,
+        ExtraPanelResizeEdges edges,
+        double? width,
+        double? height,
+        HorizontalAlignment horizontalAlignment,
+        VerticalAlignment verticalAlignment,
+        Cursor cursor,
+        Thickness margin)
+    {
+        var handle = new Thumb
+        {
+            Background = Brushes.Transparent,
+            Focusable = false,
+            HorizontalAlignment = horizontalAlignment,
+            VerticalAlignment = verticalAlignment,
+            Cursor = cursor,
+            Margin = margin,
+            Tag = new ExtraPanelResizeHandle(state, edges)
+        };
+        if (width is double handleWidth)
+        {
+            handle.Width = handleWidth;
+        }
+        if (height is double handleHeight)
+        {
+            handle.Height = handleHeight;
+        }
+
+        handle.DragStarted += ExtraPanelResize_DragStarted;
+        handle.DragDelta += ExtraPanelResize_DragDelta;
+        handle.DragCompleted += ExtraPanelResize_DragCompleted;
+        Grid.SetRowSpan(handle, 2);
+        Panel.SetZIndex(handle, 60);
+        grid.Children.Add(handle);
+    }
+
+    private async Task<bool> RefreshStudyChatConnectionCoreAsync(StudyChatPanelView view)
+    {
+        SetStudyChatConnectionStatus(view, null);
+        view.ModelSelector.IsEnabled = false;
+        try
+        {
+            await EnsureBackendRunningAsync();
+            using var response = await BackendHttpClient.GetAsync($"{BackendApiUrl}/api/ai/status");
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Status check returned {(int)response.StatusCode}.");
+            }
+
+            var status = await response.Content.ReadFromJsonAsync<OllamaStatusApiResponse>()
+                ?? throw new InvalidOperationException("The Ollama status response was empty.");
+            view.AvailableModels.Clear();
+            foreach (var model in status.Models
+                         .Where(model => !string.IsNullOrWhiteSpace(model))
+                         .Distinct(StringComparer.OrdinalIgnoreCase)
+                         .OrderBy(model => model, StringComparer.OrdinalIgnoreCase))
+            {
+                view.AvailableModels.Add(model);
+            }
+
+            var connected = status.Running && view.AvailableModels.Count > 0;
+            if (!connected)
+            {
+                view.ModelSelector.SelectedIndex = -1;
+                SetStudyChatConnectionStatus(view, false, status.Error);
+                return false;
+            }
+
+            var selectedModel = view.AvailableModels.FirstOrDefault(model =>
+                                    string.Equals(model, _selectedAiModel, StringComparison.OrdinalIgnoreCase))
+                                ?? view.AvailableModels.FirstOrDefault(model =>
+                                    string.Equals(model, status.ConfiguredModel, StringComparison.OrdinalIgnoreCase))
+                                ?? view.AvailableModels[0];
+            _isSyncingAiModelSelection = true;
+            try
+            {
+                _selectedAiModel = selectedModel;
+                view.ModelSelector.SelectedItem = selectedModel;
+                if (AiModelComboBox is not null && _availableAiModels.Contains(selectedModel))
+                {
+                    AiModelComboBox.SelectedItem = selectedModel;
+                }
+            }
+            finally
+            {
+                _isSyncingAiModelSelection = false;
+            }
+
+            view.ModelSelector.IsEnabled = true;
+            SetStudyChatConnectionStatus(view, true);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            view.AvailableModels.Clear();
+            view.ModelSelector.SelectedIndex = -1;
+            SetStudyChatConnectionStatus(view, false, FormatExceptionMessage(ex));
+            return false;
+        }
+    }
+
+    private static void SetStudyChatConnectionStatus(StudyChatPanelView view, bool? connected, string? detail = null)
+    {
+        view.IsConnected = connected == true;
+        view.StatusLight.Fill = connected switch
+        {
+            true => BrushFrom("#4F772D"),
+            false => BrushFrom("#BC4749"),
+            null => BrushFrom("#C58A2B")
+        };
+        view.StatusText.Text = connected switch
+        {
+            true => "Status: Connected",
+            false => "Status: Disconnected",
+            null => "Status: Checking..."
+        };
+        view.StatusText.ToolTip = string.IsNullOrWhiteSpace(detail) ? null : detail;
+    }
+
+    private void StudyChatModelSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isSyncingAiModelSelection
+            || sender is not ComboBox { Tag: StudyChatPanelView view, SelectedItem: string model }
+            || !view.IsConnected)
+        {
+            return;
+        }
+
+        _selectedAiModel = model;
+        SyncStudyChatModelSelections(model, view);
+        QueueWorkspaceSave();
+        ShowToast($"Chat model set to {model}");
+    }
+
+    private void SyncStudyChatModelSelections(string model, StudyChatPanelView? source = null)
+    {
+        _isSyncingAiModelSelection = true;
+        try
+        {
+            foreach (var chatView in _studyChatPanelViews.Values)
+            {
+                if (!ReferenceEquals(chatView, source)
+                    && chatView.AvailableModels.Any(candidate =>
+                        string.Equals(candidate, model, StringComparison.OrdinalIgnoreCase)))
+                {
+                    chatView.ModelSelector.SelectedItem = chatView.AvailableModels.First(candidate =>
+                        string.Equals(candidate, model, StringComparison.OrdinalIgnoreCase));
+                }
+            }
+
+            if (AiModelComboBox is not null
+                && _availableAiModels.Any(candidate =>
+                    string.Equals(candidate, model, StringComparison.OrdinalIgnoreCase)))
+            {
+                AiModelComboBox.SelectedItem = _availableAiModels.First(candidate =>
+                    string.Equals(candidate, model, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+        finally
+        {
+            _isSyncingAiModelSelection = false;
+        }
     }
 
     private async void StudyChatSend_Click(object sender, RoutedEventArgs e)
@@ -8912,28 +9751,40 @@ public partial class MainWindow : Window
             .TakeLast(12)
             .Select(message => new StudyChatMessageApi(message.Role, message.Text))
             .ToList();
-        var selectedText = _lastStudyContextSelectionText.Trim();
-        view.ContextText.Text = BuildStudyChatContextLabel(selectedText);
-        view.ContextText.ToolTip = string.IsNullOrWhiteSpace(selectedText) ? null : selectedText;
-        view.Input.Clear();
+        UpdateStudyChatContextBanners();
         view.IsSending = true;
         view.SendButton.IsEnabled = false;
-        view.SendButton.Content = "…";
-        view.State.ChatMessages.Add(new StudyChatMessageState { Role = "user", Text = question });
-        RenderStudyChatMessages(view);
-        QueueWorkspaceSave();
 
         try
         {
-            await EnsureBackendRunningAsync();
+            var connected = await RefreshStudyChatConnectionAsync(view);
+            view.Input.Clear();
+            view.State.ChatMessages.Add(new StudyChatMessageState { Role = "user", Text = question });
+            if (!connected)
+            {
+                view.State.ChatMessages.Add(new StudyChatMessageState
+                {
+                    Role = "error",
+                    Text = "Please connect a model in Ollama before sending a message."
+                });
+                return;
+            }
+
+            SynchronizeLiveStudyNotes(study);
+            var latestNotes = CreateStudyNotesText(study);
+            var selectedText = _lastStudyContextSelectionText.Trim();
+            UpdateStudyChatContextBanners();
+            RenderStudyChatMessages(view);
+            QueueWorkspaceSave();
+            var selectedModel = view.ModelSelector.SelectedItem as string ?? _selectedAiModel;
             var request = new StudyChatApiRequest(
                 study.Name,
                 CreateStudyReference(study),
                 CreateAllStudyScriptureText(study),
-                CreateStudyNotesText(study),
+                latestNotes,
                 selectedText,
                 question,
-                _selectedAiModel,
+                selectedModel,
                 history);
             using var response = await BackendHttpClient.PostAsJsonAsync($"{BackendApiUrl}/api/ai/chat", request);
             StudyChatApiResponse result;
@@ -8959,17 +9810,19 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            var stillConnected = await RefreshStudyChatConnectionAsync(view);
             view.State.ChatMessages.Add(new StudyChatMessageState
             {
                 Role = "error",
-                Text = $"I couldn't reach the local model. {FormatExceptionMessage(ex)}"
+                Text = stillConnected
+                    ? $"The local model could not complete that message. {FormatExceptionMessage(ex)}"
+                    : "Please connect a model in Ollama before sending a message."
             });
         }
         finally
         {
             view.IsSending = false;
             view.SendButton.IsEnabled = true;
-            view.SendButton.Content = "➤";
             RenderStudyChatMessages(view);
             QueueWorkspaceSave();
             view.Input.Focus();
@@ -9159,9 +10012,38 @@ public partial class MainWindow : Window
             return "Uses this passage and all notes on the page";
         }
 
-        var compact = Regex.Replace(selectedText.Trim(), @"\s+", " ");
-        var preview = compact.Length <= 74 ? compact : $"{compact[..71]}...";
-        return $"Selected: “{preview}” · plus the full page";
+        return "Uses selected text, this passage, and all notes on the page";
+    }
+
+    private void InvalidateStudyChatSelectionAfterNotesEdit(string changedSource)
+    {
+        if (string.IsNullOrWhiteSpace(_lastStudyContextSelectionText)
+            || string.IsNullOrWhiteSpace(_lastStudyContextSelectionSourceKey))
+        {
+            return;
+        }
+
+        var sourceChanged = changedSource.EndsWith(":", StringComparison.Ordinal)
+            ? _lastStudyContextSelectionSourceKey.StartsWith(changedSource, StringComparison.Ordinal)
+            : string.Equals(_lastStudyContextSelectionSourceKey, changedSource, StringComparison.Ordinal);
+        if (!sourceChanged)
+        {
+            return;
+        }
+
+        _lastStudyContextSelectionText = string.Empty;
+        _lastStudyContextSelectionSourceKey = string.Empty;
+        UpdateStudyChatContextBanners();
+    }
+
+    private void UpdateStudyChatContextBanners()
+    {
+        var label = BuildStudyChatContextLabel(_lastStudyContextSelectionText);
+        foreach (var chatView in _studyChatPanelViews.Values)
+        {
+            chatView.ContextText.Text = label;
+            chatView.ContextText.ToolTip = null;
+        }
     }
 
     private PanelGeometryState ClampExtraPanelGeometry(PanelGeometryState geometry)
@@ -9222,6 +10104,7 @@ public partial class MainWindow : Window
         if (sender is TextBox { Tag: ExtraStudyPanelState state } textBox)
         {
             state.NotesText = textBox.Text;
+            InvalidateStudyChatSelectionAfterNotesEdit($"panel:{state.Id}");
             QueueWorkspaceSave();
         }
     }
@@ -9368,45 +10251,147 @@ public partial class MainWindow : Window
 
     private void ExtraPanelResize_DragStarted(object sender, DragStartedEventArgs e)
     {
-        if (sender is not FrameworkElement { Tag: ExtraStudyPanelState state }
-            || !_extraPanelRuntimes.TryGetValue(state.Id, out var runtime))
+        if (sender is not FrameworkElement { Tag: ExtraPanelResizeHandle payload }
+            || !_extraPanelRuntimes.TryGetValue(payload.State.Id, out var runtime)
+            || StudyPanel.ActualWidth <= 0
+            || StudyPanel.ActualHeight <= 0)
         {
             return;
         }
 
+        CompleteExtraPanelDrag(save: true);
+        CompleteExtraPanelResize(save: true);
         _resizingExtraPanel = runtime;
+        _extraPanelResizeEdges = payload.Edges;
         _extraPanelResizeStartPointer = Mouse.GetPosition(StudyPanel);
         _extraPanelResizeStartBounds = new Rect(runtime.Transform.X, runtime.Transform.Y, runtime.Root.Width, runtime.Root.Height);
+        _extraPanelResizePendingBounds = _extraPanelResizeStartBounds;
+        _extraPanelResizeOriginalCacheMode = runtime.Root.CacheMode;
+        runtime.Root.CacheMode = null;
         Panel.SetZIndex(runtime.Root, ++_topPanelZIndex);
+        e.Handled = true;
     }
 
     private void ExtraPanelResize_DragDelta(object sender, DragDeltaEventArgs e)
     {
-        if (_resizingExtraPanel is null)
+        if (_resizingExtraPanel is null
+            || sender is not FrameworkElement { Tag: ExtraPanelResizeHandle payload }
+            || !ReferenceEquals(payload.State, _resizingExtraPanel.State))
         {
             return;
         }
 
         var pointer = Mouse.GetPosition(StudyPanel);
         var delta = pointer - _extraPanelResizeStartPointer;
-        var geometry = ClampExtraPanelGeometry(new PanelGeometryState
+        var left = _extraPanelResizeStartBounds.Left;
+        var right = _extraPanelResizeStartBounds.Right;
+        var top = _extraPanelResizeStartBounds.Top;
+        var bottom = _extraPanelResizeStartBounds.Bottom;
+        var desiredMinimumWidth = _resizingExtraPanel.State.Kind == ExtraStudyPanelKind.Chat ? 300d : 180d;
+        var desiredMinimumHeight = _resizingExtraPanel.State.Kind == ExtraStudyPanelKind.Chat ? 260d : 160d;
+        var availableWidth = _extraPanelResizeEdges.HasFlag(ExtraPanelResizeEdges.Left)
+            ? right
+            : StudyPanel.ActualWidth - left;
+        var availableHeight = _extraPanelResizeEdges.HasFlag(ExtraPanelResizeEdges.Top)
+            ? bottom
+            : StudyPanel.ActualHeight - top;
+        var minimumWidth = Math.Min(desiredMinimumWidth, Math.Max(1, availableWidth));
+        var minimumHeight = Math.Min(desiredMinimumHeight, Math.Max(1, availableHeight));
+
+        if (_extraPanelResizeEdges.HasFlag(ExtraPanelResizeEdges.Left))
         {
-            X = _extraPanelResizeStartBounds.Left,
-            Y = _extraPanelResizeStartBounds.Top,
-            Width = _extraPanelResizeStartBounds.Width + delta.X,
-            Height = _extraPanelResizeStartBounds.Height + delta.Y
-        });
-        _resizingExtraPanel.Root.Width = geometry.Width;
-        _resizingExtraPanel.Root.Height = geometry.Height;
-        _resizingExtraPanel.Transform.X = geometry.X;
-        _resizingExtraPanel.Transform.Y = geometry.Y;
-        _resizingExtraPanel.State.Geometry = geometry;
+            left = Math.Clamp(left + delta.X, 0, right - minimumWidth);
+        }
+        if (_extraPanelResizeEdges.HasFlag(ExtraPanelResizeEdges.Right))
+        {
+            right = Math.Clamp(right + delta.X, left + minimumWidth, StudyPanel.ActualWidth);
+        }
+        if (_extraPanelResizeEdges.HasFlag(ExtraPanelResizeEdges.Top))
+        {
+            top = Math.Clamp(top + delta.Y, 0, bottom - minimumHeight);
+        }
+        if (_extraPanelResizeEdges.HasFlag(ExtraPanelResizeEdges.Bottom))
+        {
+            bottom = Math.Clamp(bottom + delta.Y, top + minimumHeight, StudyPanel.ActualHeight);
+        }
+
+        left = Math.Round(left);
+        top = Math.Round(top);
+        right = Math.Round(Math.Max(left + minimumWidth, right));
+        bottom = Math.Round(Math.Max(top + minimumHeight, bottom));
+        _extraPanelResizePendingBounds = new Rect(new Point(left, top), new Point(right, bottom));
+        if (!_extraPanelResizeRenderSubscribed)
+        {
+            _extraPanelResizeRenderSubscribed = true;
+            CompositionTarget.Rendering += ExtraPanelResize_Rendering;
+        }
+        e.Handled = true;
+    }
+
+    private void ExtraPanelResize_Rendering(object? sender, EventArgs e)
+    {
+        ApplyPendingExtraPanelResize();
+    }
+
+    private void ApplyPendingExtraPanelResize()
+    {
+        if (_resizingExtraPanel is null || _extraPanelResizePendingBounds == Rect.Empty)
+        {
+            StopExtraPanelResizeRendering();
+            return;
+        }
+
+        var bounds = _extraPanelResizePendingBounds;
+        _resizingExtraPanel.Root.Width = bounds.Width;
+        _resizingExtraPanel.Root.Height = bounds.Height;
+        _resizingExtraPanel.Transform.X = bounds.Left;
+        _resizingExtraPanel.Transform.Y = bounds.Top;
+        _resizingExtraPanel.State.Geometry = new PanelGeometryState
+        {
+            X = bounds.Left,
+            Y = bounds.Top,
+            Width = bounds.Width,
+            Height = bounds.Height
+        };
+    }
+
+    private void StopExtraPanelResizeRendering()
+    {
+        if (!_extraPanelResizeRenderSubscribed)
+        {
+            return;
+        }
+
+        CompositionTarget.Rendering -= ExtraPanelResize_Rendering;
+        _extraPanelResizeRenderSubscribed = false;
     }
 
     private void ExtraPanelResize_DragCompleted(object sender, DragCompletedEventArgs e)
     {
+        CompleteExtraPanelResize(save: true);
+        e.Handled = true;
+    }
+
+    private void CompleteExtraPanelResize(bool save)
+    {
+        var runtime = _resizingExtraPanel;
+        if (runtime is not null)
+        {
+            ApplyPendingExtraPanelResize();
+            runtime.Root.CacheMode = _extraPanelResizeOriginalCacheMode;
+        }
+
+        StopExtraPanelResizeRendering();
         _resizingExtraPanel = null;
-        QueueWorkspaceSave();
+        _extraPanelResizeEdges = ExtraPanelResizeEdges.None;
+        _extraPanelResizeOriginalCacheMode = null;
+        _extraPanelResizeStartBounds = Rect.Empty;
+        _extraPanelResizePendingBounds = Rect.Empty;
+        _extraPanelResizeStartPointer = new Point();
+        if (save && runtime is not null)
+        {
+            QueueWorkspaceSave();
+        }
     }
 
     private static string FirstNonEmpty(params string?[] values)
@@ -11642,6 +12627,7 @@ public enum BreadcrumbTarget
     ReminderSettings,
     Settings,
     ColorThemeSettings,
+    BibleVersionSettings,
     LocalAiSettings,
     WorkspaceItem,
     Study
@@ -12017,6 +13003,8 @@ public sealed class WorkspaceState
     public ReminderSettingsState ReminderSettings { get; set; } = new();
 
     public ColorSettingsState ColorSettings { get; set; } = new();
+
+    public string SelectedBibleVersion { get; set; } = "NASB1995";
 
     public WindowPlacementState? WindowPlacement { get; set; }
 }
@@ -12416,7 +13404,10 @@ public sealed class StudyChatPanelView(
     ScrollViewer scrollViewer,
     TextBox input,
     Button sendButton,
-    TextBlock contextText)
+    TextBlock contextText,
+    ComboBox modelSelector,
+    Ellipse statusLight,
+    TextBlock statusText)
 {
     public ExtraStudyPanelState State { get; } = state;
 
@@ -12430,7 +13421,19 @@ public sealed class StudyChatPanelView(
 
     public TextBlock ContextText { get; } = contextText;
 
+    public ComboBox ModelSelector { get; } = modelSelector;
+
+    public Ellipse StatusLight { get; } = statusLight;
+
+    public TextBlock StatusText { get; } = statusText;
+
+    public ObservableCollection<string> AvailableModels { get; } = new();
+
     public bool IsSending { get; set; }
+
+    public bool IsConnected { get; set; }
+
+    public Task<bool>? ConnectionRefreshTask { get; set; }
 }
 
 public sealed class DailyNoteState
@@ -12451,6 +13454,8 @@ public sealed class ScheduledNotificationState
     public string Delivery { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
+
+    public DateTimeOffset? ScheduledFor { get; set; }
 
     public bool Deleted { get; set; }
 
@@ -12717,7 +13722,16 @@ public sealed record GreekLexiconEntry(
 
 public sealed class BibleTranslationFile
 {
+    [JsonPropertyName("metadata")]
+    public BibleTranslationMetadata? Metadata { get; set; }
+
     public List<BibleTranslationVerse> Verses { get; set; } = new();
+}
+
+public sealed class BibleTranslationMetadata
+{
+    [JsonPropertyName("copyright_statement")]
+    public string CopyrightStatement { get; set; } = string.Empty;
 }
 
 public sealed class BibleTranslationVerse
