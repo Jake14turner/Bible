@@ -15,6 +15,7 @@
     <None Include="Data\tagnt-mat-jhn.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Data\tagnt-act-rev.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Data\tbesg.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Data\EnglishDictionary\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

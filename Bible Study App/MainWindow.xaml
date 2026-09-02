@@ -1720,6 +1720,116 @@
                 <StackPanel Grid.Column="1"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
+                    <Button x:Name="PanelLayoutButton"
+                            Style="{StaticResource ChromeButtonStyle}"
+                            Background="{DynamicResource AppBackground}"
+                            BorderBrush="{DynamicResource StrokeSoft}"
+                            Padding="13,9"
+                            Margin="0,0,10,0"
+                            VerticalAlignment="Center"
+                            Visibility="{Binding Visibility, ElementName=PassagePickerCard}"
+                            ToolTip="Arrange every open panel in this study"
+                            Click="PanelLayoutButton_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Grid Width="17" Height="17" VerticalAlignment="Center">
+                                <Border BorderBrush="{DynamicResource Mint}" BorderThickness="1.5" CornerRadius="2" />
+                                <Border Width="1.5" Background="{DynamicResource Mint}" HorizontalAlignment="Center" />
+                                <Border Height="1.5" Background="{DynamicResource Mint}" VerticalAlignment="Center" />
+                            </Grid>
+                            <TextBlock Text="Arrange"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       FontSize="13"
+                                       FontWeight="Bold"
+                                       Margin="8,0,0,0"
+                                       VerticalAlignment="Center" />
+                            <Border Background="{DynamicResource PanelBackground}"
+                                    CornerRadius="9"
+                                    Padding="7,2"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center">
+                                <TextBlock x:Name="PanelLayoutCountText"
+                                           Text="1"
+                                           Foreground="{DynamicResource Mint}"
+                                           FontSize="11"
+                                           FontWeight="Black" />
+                            </Border>
+                        </StackPanel>
+                    </Button>
+
+                    <Popup x:Name="PanelOrganizerPopup"
+                           PlacementTarget="{Binding ElementName=PanelLayoutButton}"
+                           Placement="Bottom"
+                           HorizontalOffset="0"
+                           VerticalOffset="8"
+                           AllowsTransparency="True"
+                           PopupAnimation="Fade"
+                           StaysOpen="False">
+                        <Border Width="390"
+                                MaxHeight="560"
+                                Background="{DynamicResource TextPrimary}"
+                                BorderBrush="#111111"
+                                BorderThickness="1.5"
+                                CornerRadius="14"
+                                Padding="16">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#000000"
+                                                  BlurRadius="12"
+                                                  ShadowDepth="5"
+                                                  Direction="315"
+                                                  Opacity="0.28" />
+                            </Border.Effect>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Arrange this study"
+                                                   Foreground="#111111"
+                                                   FontSize="18"
+                                                   FontWeight="Black" />
+                                        <TextBlock x:Name="PanelLayoutSummaryText"
+                                                   Foreground="{DynamicResource PanelBackground}"
+                                                   FontSize="12"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,4,0,0"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock x:Name="PanelLayoutInventoryText"
+                                                   Foreground="{DynamicResource AppBackground}"
+                                                   FontSize="11"
+                                                   Margin="0,5,0,0"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1"
+                                            Style="{StaticResource PanelToolbarButtonStyle}"
+                                            Width="36"
+                                            Height="34"
+                                            Padding="0"
+                                            Click="ClosePanelOrganizer_Click"
+                                            ToolTip="Close panel organizer">
+                                        <TextBlock Text="X" FontSize="12" FontWeight="Black" />
+                                    </Button>
+                                </Grid>
+                                <Border Grid.Row="1"
+                                        Height="1"
+                                        Background="{DynamicResource PanelBackground}"
+                                        Opacity="0.35"
+                                        Margin="0,12,0,12" />
+                                <ScrollViewer Grid.Row="2"
+                                              VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled">
+                                    <StackPanel x:Name="PanelLayoutOptionsHost" />
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+                    </Popup>
+
                     <Button x:Name="StudyChatToggleButton"
                             Style="{StaticResource ChromeButtonStyle}"
                             Background="{DynamicResource AppBackground}"
@@ -4654,18 +4764,66 @@
                                                    Margin="0,4,0,0"
                                                    TextWrapping="Wrap" />
                                     </StackPanel>
-                                    <Button Grid.Column="1"
-                                            Style="{StaticResource PanelToolbarButtonStyle}"
-                                            MinWidth="42"
-                                            Width="42"
-                                            Height="38"
-                                            Padding="0"
-                                            Click="CloseStrongsPanel_Click"
-                                            ToolTip="Close Strong's panel">
-                                        <TextBlock Text="X"
-                                                   FontWeight="Black"
-                                                   FontSize="14" />
-                                    </Button>
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal">
+                                        <ToggleButton x:Name="StrongsAdvancedToggle"
+                                                      Height="38"
+                                                      Margin="0,0,8,0"
+                                                      Padding="12,0"
+                                                      Cursor="Hand"
+                                                      FocusVisualStyle="{x:Null}"
+                                                      Checked="StrongsAdvancedToggle_Changed"
+                                                      Unchecked="StrongsAdvancedToggle_Changed"
+                                                      ToolTip="Show or hide scholarly Strong's details">
+                                            <ToggleButton.Template>
+                                                <ControlTemplate TargetType="ToggleButton">
+                                                    <Border x:Name="AdvancedToggleRoot"
+                                                            Background="{DynamicResource AppBackground}"
+                                                            BorderBrush="{DynamicResource PanelBackground}"
+                                                            BorderThickness="1"
+                                                            CornerRadius="10"
+                                                            Padding="{TemplateBinding Padding}">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <Ellipse x:Name="AdvancedToggleDot"
+                                                                     Width="8"
+                                                                     Height="8"
+                                                                     Margin="0,0,7,0"
+                                                                     VerticalAlignment="Center"
+                                                                     Fill="{DynamicResource TextMuted}" />
+                                                            <TextBlock Text="Advanced"
+                                                                       Foreground="{DynamicResource TextPrimary}"
+                                                                       FontSize="12"
+                                                                       FontWeight="Bold"
+                                                                       VerticalAlignment="Center" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="AdvancedToggleRoot" Property="Background" Value="{DynamicResource PanelBackground}" />
+                                                        </Trigger>
+                                                        <Trigger Property="IsChecked" Value="True">
+                                                            <Setter TargetName="AdvancedToggleRoot" Property="Background" Value="{DynamicResource Mint}" />
+                                                            <Setter TargetName="AdvancedToggleDot" Property="Fill" Value="{DynamicResource AppBackground}" />
+                                                        </Trigger>
+                                                        <Trigger Property="IsPressed" Value="True">
+                                                            <Setter TargetName="AdvancedToggleRoot" Property="Opacity" Value="0.78" />
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </ToggleButton.Template>
+                                        </ToggleButton>
+                                        <Button Style="{StaticResource PanelToolbarButtonStyle}"
+                                                MinWidth="42"
+                                                Width="42"
+                                                Height="38"
+                                                Padding="0"
+                                                Click="CloseStrongsPanel_Click"
+                                                ToolTip="Close Strong's panel">
+                                            <TextBlock Text="X"
+                                                       FontWeight="Black"
+                                                       FontSize="14" />
+                                        </Button>
+                                    </StackPanel>
                                 </Grid>
                                 <ScrollViewer x:Name="StrongsScrollViewer"
                                               Grid.Row="1"
@@ -4682,23 +4840,85 @@
                                                 Padding="10"
                                                 Margin="0,0,0,10">
                                             <StackPanel>
-                                                <TextBlock Text="WORD"
+                                                <TextBlock Text="IN THIS VERSE"
                                                            Foreground="{DynamicResource PanelBackground}"
                                                            FontSize="11"
                                                            FontWeight="Black" />
-                                                <TextBlock x:Name="StrongsGreekText"
+                                                <TextBlock x:Name="StrongsEnglishText"
                                                            Text="No word selected yet."
                                                            Foreground="#111111"
                                                            FontSize="22"
                                                            FontWeight="Black"
                                                            Margin="0,5,0,0"
                                                            TextWrapping="Wrap" />
-                                                <TextBlock x:Name="StrongsEnglishText"
+                                                <TextBlock x:Name="StrongsGreekText"
                                                            Foreground="{DynamicResource AppBackground}"
                                                            FontSize="14"
                                                            FontWeight="SemiBold"
                                                            Margin="0,8,0,0"
                                                            TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border x:Name="StrongsSimpleMeaningSection"
+                                                Background="{DynamicResource TextPrimary}"
+                                                BorderBrush="#111111"
+                                                BorderThickness="1"
+                                                CornerRadius="6"
+                                                Padding="12"
+                                                Margin="0,0,0,10">
+                                            <StackPanel>
+                                                <TextBlock Text="ENGLISH MEANINGS"
+                                                           Foreground="{DynamicResource PanelBackground}"
+                                                           FontSize="11"
+                                                           FontWeight="Black" />
+                                                <TextBlock x:Name="StrongsSimplePrimaryMeaningText"
+                                                           Foreground="#111111"
+                                                           FontSize="20"
+                                                           FontWeight="Black"
+                                                           Margin="0,6,0,0"
+                                                           TextWrapping="Wrap" />
+                                                <StackPanel x:Name="StrongsSimpleMeaningItems"
+                                                            Margin="0,8,0,0" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border x:Name="StrongsSimpleDefinitionSection"
+                                                Background="{DynamicResource TextPrimary}"
+                                                BorderBrush="#111111"
+                                                BorderThickness="1"
+                                                CornerRadius="6"
+                                                Padding="12"
+                                                Margin="0,0,0,10">
+                                            <StackPanel>
+                                                <TextBlock Text="SIMPLE DEFINITION"
+                                                           Foreground="{DynamicResource PanelBackground}"
+                                                           FontSize="11"
+                                                           FontWeight="Black" />
+                                                <StackPanel x:Name="StrongsSimpleDefinitionItems"
+                                                            Margin="0,8,0,0" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border x:Name="StrongsSimpleReferencesSection"
+                                                Background="{DynamicResource TextSecondary}"
+                                                BorderBrush="{DynamicResource Mint}"
+                                                BorderThickness="1"
+                                                CornerRadius="6"
+                                                Padding="12"
+                                                Margin="0,0,0,10">
+                                            <StackPanel>
+                                                <TextBlock Text="VERSE REFERENCES"
+                                                           Foreground="{DynamicResource PanelBackground}"
+                                                           FontSize="11"
+                                                           FontWeight="Black" />
+                                                <TextBlock Text="Hover to read · click to open"
+                                                           Foreground="{DynamicResource AppBackground}"
+                                                           FontSize="11"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,3,0,0" />
+                                                <WrapPanel x:Name="StrongsSimpleReferenceItems"
+                                                           Margin="0,8,0,0" />
                                             </StackPanel>
                                         </Border>
 

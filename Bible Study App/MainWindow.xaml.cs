@@ -130,14 +130,25 @@ public partial class MainWindow : Window
     private readonly Dictionary<int, Paragraph> _scriptureParagraphsByVerse = new();
     private readonly Dictionary<ScriptureReferenceKey, List<TagntWordEntry>> _tagntEntriesByReference = new();
     private readonly Dictionary<string, GreekLexiconEntry> _greekLexiconByStrong = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly GreekLexiconEntry EmptyGreekLexiconEntry = new(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
+    private readonly EnglishDictionaryService _englishDictionary = new();
+    private static readonly GreekLexiconEntry EmptyGreekLexiconEntry = new(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
     private enum DefinitionLineKind { Lead, Main, Sub }
     private enum MemoryPracticeMode { Typing, Visual }
     private sealed record DefinitionLine(DefinitionLineKind Kind, string Marker, string Text);
-    private sealed record VerseReference(string DisplayText, string BookName, int Chapter, int Verse);
+    private sealed record VerseReference(string DisplayText, string BookName, int Chapter, int Verse, int EndVerse);
+    private sealed record EnglishWordHover(string Word);
     private sealed record SelectionSegment(Control Target, string SourceKey, int Start, int Length, string Text);
     private enum MovablePanelKind { Editor, Scripture, Strongs }
     private enum PanelPreset { Top, Left, Right, Bottom, Float }
+    private enum StudyPanelLayout { Fill, Center, Columns, Rows, MainLeft, MainTop, Grid, Cascade }
+    private sealed record StudyPanelLayoutChoice(StudyPanelLayout Layout, string Title, string Description, bool Recommended = false);
+    private sealed record VisibleStudyPanel(
+        string Id,
+        string Title,
+        Border Root,
+        TranslateTransform Transform,
+        MovablePanelKind? PrimaryKind,
+        ExtraStudyPanelState? ExtraState);
     [Flags]
     private enum ExtraPanelResizeEdges { None = 0, Left = 1, Top = 2, Right = 4, Bottom = 8 }
     private sealed record ExtraPanelResizeHandle(ExtraStudyPanelState State, ExtraPanelResizeEdges Edges);
@@ -189,6 +200,7 @@ public partial class MainWindow : Window
     private bool _sidebarCollapsed;
     private bool _scripturePanelHidden;
     private bool _strongsEnabled;
+    private bool _strongsAdvancedModeEnabled;
     private bool _greekLexiconLoaded;
     private bool _isRefreshingAiModels;
     private bool _isSyncingAiModelSelection;
@@ -357,11 +369,13 @@ public partial class MainWindow : Window
         AiModelComboBox.ItemsSource = _availableAiModels;
         MemoryPassageItems.ItemsSource = _scriptureMemoryItems;
         LoadWorkspaceState();
+        StrongsAdvancedToggle.IsChecked = _strongsAdvancedModeEnabled;
         LoadScriptureText();
         RefreshSavedMemoryPassageTranslations();
         UpdateBibleVersionSettingsUi();
         InitializeMemorySelectors();
         LoadTagntData();
+        _ = Task.Run(_englishDictionary.WarmUp);
         WorkspaceCountText.Text = $"{BibleBooks.Count} books ready";
         RenderBreadcrumbs();
         RenderTodayDashboard();
@@ -545,6 +559,7 @@ public partial class MainWindow : Window
             }
 
             _selectedBibleVersion = NormalizeBibleVersion(state.SelectedBibleVersion);
+            _strongsAdvancedModeEnabled = state.StrongsAdvancedModeEnabled;
             RestoreWindowPlacement(state.WindowPlacement);
             _workspaceByBook.Clear();
             _dailyNotesByDate.Clear();
@@ -794,6 +809,7 @@ public partial class MainWindow : Window
                 ReminderSettings = CreateReminderSettingsState(),
                 ColorSettings = CreateColorSettingsState(),
                 SelectedBibleVersion = _selectedBibleVersion,
+                StrongsAdvancedModeEnabled = _strongsAdvancedModeEnabled,
                 WindowPlacement = CreateWindowPlacementState()
             };
             var json = JsonSerializer.Serialize(state, new JsonSerializerOptions
@@ -4656,7 +4672,9 @@ public partial class MainWindow : Window
             cells[4].Trim(),
             cells[5].Trim(),
             cells[6].Trim(),
-            CleanLexiconMarkup(cells[7].Trim()));
+            CleanLexiconMarkup(cells[7].Trim()),
+            ExtractLexiconEnglishMeanings(cells[7]),
+            ExtractLexiconReferenceTargets(cells[7]));
         return true;
     }
 
@@ -4802,6 +4820,35 @@ public partial class MainWindow : Window
         cleaned = Regex.Replace(cleaned, @"[ \t]+", " ", RegexOptions.CultureInvariant);
         cleaned = Regex.Replace(cleaned, @"\n{3,}", "\n\n", RegexOptions.CultureInvariant);
         return cleaned.Trim();
+    }
+
+    private static string ExtractLexiconEnglishMeanings(string markup)
+    {
+        if (string.IsNullOrWhiteSpace(markup))
+        {
+            return string.Empty;
+        }
+
+        var meanings = Regex.Matches(markup, @"<b(?:\s[^>]*)?>(?<value>.*?)</b>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            .Select(match => CleanLexiconMarkup(match.Groups["value"].Value))
+            .Select(value => Regex.Replace(value, @"\s+", " ", RegexOptions.CultureInvariant).Trim(' ', ':', ';', '.'))
+            .Where(value => Regex.IsMatch(value, @"[A-Za-z]", RegexOptions.CultureInvariant))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return string.Join("\n", meanings);
+    }
+
+    private static string ExtractLexiconReferenceTargets(string markup)
+    {
+        if (string.IsNullOrWhiteSpace(markup))
+        {
+            return string.Empty;
+        }
+
+        var targets = Regex.Matches(markup, "<ref\\s*=\\s*['\\\"](?<value>[^'\\\"]+)['\\\"]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            .Select(match => match.Groups["value"].Value.Trim())
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+        return string.Join(";", targets);
     }
 
     private void ParseTagntRows(string rawText)
@@ -7631,20 +7678,43 @@ public partial class MainWindow : Window
 
     private void VerseReference_MouseEnter(object sender, MouseEventArgs e)
     {
-        if (sender is Span { Tag: VerseReference reference })
+        var reference = sender switch
+        {
+            Span { Tag: VerseReference spanReference } => spanReference,
+            FrameworkElement { Tag: VerseReference elementReference } => elementReference,
+            _ => null
+        };
+        if (reference is not null)
         {
             ShowVerseReferencePreview(reference);
+        }
+
+        if (sender is Border chip)
+        {
+            chip.Background = GetResourceBrush("Mint");
+            chip.BorderBrush = GetResourceBrush("AppBackground");
         }
     }
 
     private void VerseReference_MouseLeave(object sender, MouseEventArgs e)
     {
         HideVerseReferencePreview();
+        if (sender is Border chip)
+        {
+            chip.Background = GetResourceBrush("AppBackground");
+            chip.BorderBrush = GetResourceBrush("PanelBackground");
+        }
     }
 
     private void VerseReference_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not Span { Tag: VerseReference reference })
+        var reference = sender switch
+        {
+            Span { Tag: VerseReference spanReference } => spanReference,
+            FrameworkElement { Tag: VerseReference elementReference } => elementReference,
+            _ => null
+        };
+        if (reference is null)
         {
             return;
         }
@@ -7655,10 +7725,17 @@ public partial class MainWindow : Window
 
     private void ShowVerseReferencePreview(VerseReference reference)
     {
-        VerseReferencePopupTitle.Text = $"{reference.BookName} {reference.Chapter}:{reference.Verse}";
-        VerseReferencePopupText.Text = TryGetVerseText(reference, out var verseText)
-            ? verseText
+        var verseText = TryGetVerseText(reference, out var resolvedVerseText)
+            ? resolvedVerseText
             : "This verse is not available in the current scripture data.";
+
+        ShowDefinitionPopup($"{reference.BookName} {reference.Chapter}:{reference.Verse}", verseText);
+    }
+
+    private void ShowDefinitionPopup(string title, string text)
+    {
+        VerseReferencePopupTitle.Text = title;
+        VerseReferencePopupText.Text = text;
 
         VerseReferencePopup.IsOpen = true;
         VerseReferencePopupRoot.BeginAnimation(OpacityProperty, null);
@@ -7681,6 +7758,42 @@ public partial class MainWindow : Window
         {
             EasingFunction = ease
         });
+    }
+
+    private void EnglishWord_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (sender is not Span { Tag: EnglishWordHover hover } span)
+        {
+            return;
+        }
+
+        span.Background = GetResourceBrush("Mint");
+        if (_englishDictionary.TryLookup(hover.Word, out var entry))
+        {
+            var definitionText = string.Join("\n", entry.Definitions.Select((definition, index) => $"{index + 1}. {definition}"));
+            if (entry.Synonyms.Count > 0)
+            {
+                definitionText += $"\n\nRelated: {string.Join(", ", entry.Synonyms)}";
+            }
+
+            var partOfSpeech = string.IsNullOrWhiteSpace(entry.PartOfSpeech)
+                ? string.Empty
+                : $" | {entry.PartOfSpeech}";
+            ShowDefinitionPopup($"{hover.Word.ToLowerInvariant()}{partOfSpeech}", definitionText);
+            return;
+        }
+
+        ShowDefinitionPopup(hover.Word.ToLowerInvariant(), "No offline dictionary definition was found for this word.");
+    }
+
+    private void EnglishWord_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (sender is Span span)
+        {
+            span.Background = Brushes.Transparent;
+        }
+
+        HideVerseReferencePreview();
     }
 
     private void HideVerseReferencePreview()
@@ -7717,7 +7830,11 @@ public partial class MainWindow : Window
             return false;
         }
 
-        verseText = verses[reference.Verse - 1];
+        var endVerse = Math.Clamp(reference.EndVerse, reference.Verse, verses.Count);
+        verseText = string.Join(" ", Enumerable.Range(reference.Verse, endVerse - reference.Verse + 1)
+            .Select(verse => endVerse == reference.Verse
+                ? verses[verse - 1]
+                : $"{verse} {verses[verse - 1]}"));
         return !string.IsNullOrWhiteSpace(verseText);
     }
 
@@ -8968,6 +9085,7 @@ public partial class MainWindow : Window
 
     private void UpdateStudyChatToggleAppearance()
     {
+        UpdatePanelLayoutButtonCount();
         if (StudyChatToggleButton is null)
         {
             return;
@@ -9107,6 +9225,8 @@ public partial class MainWindow : Window
             scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.96, 1, TimeSpan.FromMilliseconds(180)) { EasingFunction = ease });
             scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.96, 1, TimeSpan.FromMilliseconds(180)) { EasingFunction = ease });
         }
+
+        UpdatePanelLayoutButtonCount();
     }
 
 
@@ -9515,6 +9635,22 @@ public partial class MainWindow : Window
                 view.ConnectionRefreshTask = null;
             }
         }
+    }
+
+    private void StrongsAdvancedToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        _strongsAdvancedModeEnabled = StrongsAdvancedToggle.IsChecked == true;
+        UpdateStrongsSectionVisibility();
+
+        if (_isInitializing)
+        {
+            return;
+        }
+
+        QueueWorkspaceSave();
+        ShowToast(_strongsAdvancedModeEnabled
+            ? "Advanced Strong's details will stay on."
+            : "Simple Strong's view will be used from now on.");
     }
 
     private void AddExtraPanelResizeHandles(Grid grid, ExtraStudyPanelState state)
@@ -10409,9 +10545,10 @@ public partial class MainWindow : Window
             : string.IsNullOrWhiteSpace(entry.Greek)
             ? selection.Phrase
             : entry.Greek;
-        StrongsEnglishText.Text = string.IsNullOrWhiteSpace(entry.English)
+        var contextualEnglish = CleanSimpleEnglishPhrase(string.IsNullOrWhiteSpace(entry.English)
             ? selection.Phrase
-            : entry.English;
+            : entry.English);
+        SetInteractiveEnglishText(StrongsEnglishText, contextualEnglish);
         StrongsNumberText.Text = string.IsNullOrWhiteSpace(entry.DStrong)
             ? "Strong's: available when the full TAGNT dStrong row is loaded."
             : $"Strong's: {entry.DStrong}";
@@ -10430,6 +10567,7 @@ public partial class MainWindow : Window
             .ToList();
         StrongsLexiconSummaryText.Text = string.Join("\n", lexiconSummary);
 
+        SetStrongsSimpleContent(selection, lexiconEntry);
         SetStrongsDefinitionDocument(lexiconEntry?.Meaning);
         UpdateStrongsSectionVisibility();
 
@@ -10459,23 +10597,386 @@ public partial class MainWindow : Window
         StrongsWordSection.Visibility = HasVisibleText(StrongsGreekText) || HasVisibleText(StrongsEnglishText)
             ? Visibility.Visible
             : Visibility.Collapsed;
-        StrongsNumberSection.Visibility = HasVisibleText(StrongsNumberText)
+        StrongsGreekText.Visibility = _strongsAdvancedModeEnabled && HasVisibleText(StrongsGreekText)
             ? Visibility.Visible
             : Visibility.Collapsed;
-        StrongsTagntSection.Visibility = HasVisibleText(StrongsGrammarText)
+        StrongsSimpleMeaningSection.Visibility = HasVisibleText(StrongsSimplePrimaryMeaningText)
             ? Visibility.Visible
             : Visibility.Collapsed;
-        StrongsLexiconSummarySection.Visibility = HasVisibleText(StrongsLexiconSummaryText)
+        StrongsSimpleDefinitionSection.Visibility = StrongsSimpleDefinitionItems.Children.Count > 0
             ? Visibility.Visible
             : Visibility.Collapsed;
-        StrongsDefinitionSection.Visibility = StrongsDefinitionDocument.Blocks.Count > 0
+        StrongsSimpleReferencesSection.Visibility = StrongsSimpleReferenceItems.Children.Count > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        StrongsNumberSection.Visibility = _strongsAdvancedModeEnabled && HasVisibleText(StrongsNumberText)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        StrongsTagntSection.Visibility = _strongsAdvancedModeEnabled && HasVisibleText(StrongsGrammarText)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        StrongsLexiconSummarySection.Visibility = _strongsAdvancedModeEnabled && HasVisibleText(StrongsLexiconSummaryText)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        StrongsDefinitionSection.Visibility = _strongsAdvancedModeEnabled && StrongsDefinitionDocument.Blocks.Count > 0
             ? Visibility.Visible
             : Visibility.Collapsed;
     }
 
+    private void SetStrongsSimpleContent(StrongsSelection selection, GreekLexiconEntry? lexiconEntry)
+    {
+        var meanings = BuildSimpleEnglishMeanings(selection.Entry, lexiconEntry);
+        StrongsSimpleMeaningItems.Children.Clear();
+        SetInteractiveEnglishText(
+            StrongsSimplePrimaryMeaningText,
+            meanings.FirstOrDefault() ?? CleanSimpleEnglishPhrase(selection.Entry.English));
+
+        foreach (var meaning in meanings.Skip(1))
+        {
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.Children.Add(new Ellipse
+            {
+                Width = 6,
+                Height = 6,
+                Fill = GetResourceBrush("PanelBackground"),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            var text = new TextBlock
+            {
+                Foreground = new SolidColorBrush(Color.FromRgb(17, 17, 17)),
+                FontSize = 15,
+                FontWeight = FontWeights.SemiBold,
+                TextWrapping = TextWrapping.Wrap
+            };
+            SetInteractiveEnglishText(text, meaning);
+            Grid.SetColumn(text, 1);
+            row.Children.Add(text);
+            StrongsSimpleMeaningItems.Children.Add(row);
+        }
+
+        SetStrongsSimpleDefinitionContent(lexiconEntry?.Meaning);
+
+        StrongsSimpleReferenceItems.Children.Clear();
+        var references = BuildLexiconVerseReferences(lexiconEntry?.ReferenceTargets).ToList();
+        var currentReference = new VerseReference(
+            $"{selection.BookName} {selection.Chapter}:{selection.Verse}",
+            selection.BookName,
+            selection.Chapter,
+            selection.Verse,
+            selection.Verse);
+        if (!references.Any(reference => reference.BookName == currentReference.BookName
+                                         && reference.Chapter == currentReference.Chapter
+                                         && reference.Verse == currentReference.Verse))
+        {
+            references.Insert(0, currentReference);
+        }
+
+        foreach (var reference in references)
+        {
+            var chip = new Border
+            {
+                Tag = reference,
+                Background = GetResourceBrush("AppBackground"),
+                BorderBrush = GetResourceBrush("PanelBackground"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(8, 5, 8, 5),
+                Margin = new Thickness(0, 0, 6, 6),
+                Cursor = Cursors.Hand,
+                Child = new TextBlock
+                {
+                    Text = reference.DisplayText,
+                    Foreground = GetResourceBrush("TextPrimary"),
+                    FontSize = 12,
+                    FontWeight = FontWeights.Bold
+                }
+            };
+            chip.MouseEnter += VerseReference_MouseEnter;
+            chip.MouseLeave += VerseReference_MouseLeave;
+            chip.MouseLeftButtonDown += VerseReference_MouseLeftButtonDown;
+            StrongsSimpleReferenceItems.Children.Add(chip);
+        }
+    }
+
+    private static List<string> BuildSimpleEnglishMeanings(TagntWordEntry entry, GreekLexiconEntry? lexiconEntry)
+    {
+        var meanings = new List<string>();
+        void AddMeaning(string? rawMeaning)
+        {
+            var meaning = CleanSimpleEnglishPhrase(rawMeaning);
+            if (!string.IsNullOrWhiteSpace(meaning)
+                && !meanings.Contains(meaning, StringComparer.OrdinalIgnoreCase))
+            {
+                meanings.Add(meaning);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(lexiconEntry?.EnglishMeanings))
+        {
+            foreach (var phrase in lexiconEntry.EnglishMeanings.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                foreach (var meaning in Regex.Split(phrase, @"\s*[,;]\s*|\s+or\s+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                {
+                    AddMeaning(meaning);
+                }
+            }
+        }
+
+        AddMeaning(lexiconEntry?.Gloss);
+        AddMeaning(entry.Gloss);
+        AddMeaning(entry.SubMeaning);
+        if (meanings.Count == 0)
+        {
+            AddMeaning(entry.English);
+        }
+
+        return meanings;
+    }
+
+    private void SetStrongsSimpleDefinitionContent(string? meaning)
+    {
+        StrongsSimpleDefinitionItems.Children.Clear();
+        foreach (var line in BuildSimpleDefinitionLines(meaning))
+        {
+            var text = new TextBlock
+            {
+                Foreground = new SolidColorBrush(Color.FromRgb(17, 17, 17)),
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                LineHeight = 21,
+                Margin = new Thickness(0, 0, 0, 8),
+                TextWrapping = TextWrapping.Wrap
+            };
+            if (line.ShowArrow)
+            {
+                text.Inlines.Add(new Run("\u21B3 ")
+                {
+                    Foreground = GetResourceBrush("PanelBackground"),
+                    FontWeight = FontWeights.Black
+                });
+            }
+
+            AddSimpleDefinitionInlines(text, line.Text);
+            StrongsSimpleDefinitionItems.Children.Add(text);
+        }
+    }
+
+    private static List<(string Text, bool ShowArrow)> BuildSimpleDefinitionLines(string? meaning)
+    {
+        var result = new List<(string Text, bool ShowArrow)>();
+        if (string.IsNullOrWhiteSpace(meaning))
+        {
+            return result;
+        }
+
+        foreach (var line in BuildDefinitionLines(meaning).Where(line => line.Kind != DefinitionLineKind.Lead))
+        {
+            var cleaned = CleanSimpleDefinitionLine(line.Text);
+            if (string.IsNullOrWhiteSpace(cleaned))
+            {
+                continue;
+            }
+
+            var fragments = Regex.Split(cleaned, @"(?<=\d\.)\s+(?=[A-Z][a-z])", RegexOptions.CultureInvariant)
+                .Where(fragment => !string.IsNullOrWhiteSpace(fragment))
+                .ToList();
+            for (var index = 0; index < fragments.Count; index++)
+            {
+                result.Add((fragments[index].Trim(), line.Kind == DefinitionLineKind.Sub && index == 0));
+            }
+        }
+
+        return result;
+    }
+
+    private static string CleanSimpleDefinitionLine(string text)
+    {
+        var cleaned = Regex.Replace(text, @"[\u0370-\u03FF\u1F00-\u1FFF]+(?:[\s.'’]*[\u0370-\u03FF\u1F00-\u1FFF]+)*", string.Empty, RegexOptions.CultureInvariant);
+        cleaned = Regex.Replace(cleaned, @"[\u0590-\u05FF]+(?:\s+[\u0590-\u05FF]+)*", string.Empty, RegexOptions.CultureInvariant);
+        cleaned = Regex.Replace(cleaned, @"\((?!\s*LXX\s*\))[^)]*\)", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        cleaned = Regex.Replace(cleaned, @"\s+([,;:.])", "$1", RegexOptions.CultureInvariant);
+        cleaned = Regex.Replace(cleaned, @",\s*,+", ", ", RegexOptions.CultureInvariant);
+        cleaned = Regex.Replace(cleaned, @";\s*,+", "; ", RegexOptions.CultureInvariant);
+        cleaned = Regex.Replace(cleaned, @":\s*,+", ": ", RegexOptions.CultureInvariant);
+        cleaned = Regex.Replace(cleaned, @",\s+(?=[1-3]?[A-Za-z]{2,4}\.\d{1,3}:)", " ", RegexOptions.CultureInvariant);
+        cleaned = Regex.Replace(cleaned, @"\s{2,}", " ", RegexOptions.CultureInvariant);
+        return cleaned.Trim(' ', ',');
+    }
+
+    private void AddSimpleDefinitionInlines(TextBlock textBlock, string text)
+    {
+        const string tokenPattern = @"(?<reference>(?:(?<book>[1-3]?[A-Za-z]{2,4})\.)?(?<chapter>\d{1,3}):(?<verse>\d{1,3})(?:-(?<endVerse>\d{1,3}))?)|(?<word>[A-Za-z]+(?:['’][A-Za-z]+)?)";
+        var cursor = 0;
+        string? currentBookName = null;
+        foreach (Match match in Regex.Matches(text, tokenPattern, RegexOptions.CultureInvariant))
+        {
+            if (match.Index > cursor)
+            {
+                textBlock.Inlines.Add(new Run(text[cursor..match.Index]));
+            }
+
+            if (match.Groups["reference"].Success)
+            {
+                if (match.Groups["book"].Success
+                    && TryMapTagntBookCode(match.Groups["book"].Value, out var mappedBookName))
+                {
+                    currentBookName = mappedBookName;
+                }
+
+                if (!string.IsNullOrWhiteSpace(currentBookName)
+                    && int.TryParse(match.Groups["chapter"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var chapter)
+                    && int.TryParse(match.Groups["verse"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var verse))
+                {
+                    var endVerse = verse;
+                    if (match.Groups["endVerse"].Success
+                        && int.TryParse(match.Groups["endVerse"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedEndVerse))
+                    {
+                        endVerse = Math.Max(verse, parsedEndVerse);
+                    }
+
+                    var reference = new VerseReference(match.Value, currentBookName, chapter, verse, endVerse);
+                    var link = new Span(new Run(match.Value))
+                    {
+                        Cursor = Cursors.Hand,
+                        FontWeight = FontWeights.Black,
+                        Foreground = GetResourceBrush("PanelBackground"),
+                        Tag = reference
+                    };
+                    link.MouseEnter += VerseReference_MouseEnter;
+                    link.MouseLeave += VerseReference_MouseLeave;
+                    link.MouseLeftButtonDown += VerseReference_MouseLeftButtonDown;
+                    textBlock.Inlines.Add(link);
+                }
+                else
+                {
+                    textBlock.Inlines.Add(new Run(match.Value));
+                }
+            }
+            else
+            {
+                var word = match.Groups["word"].Value;
+                var isOutlineMarker = word.Length == 1
+                                      && match.Index + match.Length < text.Length
+                                      && text[match.Index + match.Length] == '.';
+                if (isOutlineMarker || Regex.IsMatch(word, @"^[A-Z]{2,}$", RegexOptions.CultureInvariant))
+                {
+                    textBlock.Inlines.Add(new Run(word));
+                }
+                else
+                {
+                    var span = new Span(new Run(word))
+                    {
+                        Tag = new EnglishWordHover(word),
+                        Cursor = Cursors.Help
+                    };
+                    span.MouseEnter += EnglishWord_MouseEnter;
+                    span.MouseLeave += EnglishWord_MouseLeave;
+                    textBlock.Inlines.Add(span);
+                }
+            }
+
+            cursor = match.Index + match.Length;
+        }
+
+        if (cursor < text.Length)
+        {
+            textBlock.Inlines.Add(new Run(text[cursor..]));
+        }
+    }
+
+    private static string CleanSimpleEnglishPhrase(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var cleaned = Regex.Replace(value, @"\[([^\]]+)\]", "$1", RegexOptions.CultureInvariant);
+        cleaned = Regex.Replace(cleaned, @"\s+", " ", RegexOptions.CultureInvariant);
+        return cleaned.Trim(' ', ',', ';', ':', '.');
+    }
+
+    private void SetInteractiveEnglishText(TextBlock textBlock, string text)
+    {
+        textBlock.Inlines.Clear();
+        const string wordPattern = @"[A-Za-z]+(?:['’][A-Za-z]+)?";
+        var cursor = 0;
+        foreach (Match match in Regex.Matches(text, wordPattern, RegexOptions.CultureInvariant))
+        {
+            if (match.Index > cursor)
+            {
+                textBlock.Inlines.Add(new Run(text[cursor..match.Index]));
+            }
+
+            var word = match.Value;
+            var span = new Span(new Run(word))
+            {
+                Tag = new EnglishWordHover(word),
+                Cursor = Cursors.Help
+            };
+            span.MouseEnter += EnglishWord_MouseEnter;
+            span.MouseLeave += EnglishWord_MouseLeave;
+            textBlock.Inlines.Add(span);
+            cursor = match.Index + match.Length;
+        }
+
+        if (cursor < text.Length)
+        {
+            textBlock.Inlines.Add(new Run(text[cursor..]));
+        }
+    }
+
+    private static IEnumerable<VerseReference> BuildLexiconVerseReferences(string? referenceTargets)
+    {
+        if (string.IsNullOrWhiteSpace(referenceTargets))
+        {
+            yield break;
+        }
+
+        const string targetPattern = @"(?:(?<book>[1-3]?[A-Za-z]{2,4})\.)?(?<chapter>\d{1,3})\.(?<verse>\d{1,3})(?:-(?<endVerse>\d{1,3}))?";
+        string? currentBookCode = null;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match match in Regex.Matches(referenceTargets, targetPattern, RegexOptions.CultureInvariant))
+        {
+            if (match.Groups["book"].Success)
+            {
+                currentBookCode = match.Groups["book"].Value;
+            }
+
+            if (string.IsNullOrWhiteSpace(currentBookCode)
+                || !TryMapTagntBookCode(currentBookCode, out var bookName)
+                || !int.TryParse(match.Groups["chapter"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var chapter)
+                || !int.TryParse(match.Groups["verse"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var verse))
+            {
+                continue;
+            }
+
+            var endVerse = verse;
+            if (match.Groups["endVerse"].Success
+                && int.TryParse(match.Groups["endVerse"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedEndVerse))
+            {
+                endVerse = Math.Max(verse, parsedEndVerse);
+            }
+
+            var key = $"{bookName}|{chapter}|{verse}|{endVerse}";
+            if (!seen.Add(key))
+            {
+                continue;
+            }
+
+            var display = endVerse == verse
+                ? $"{bookName} {chapter}:{verse}"
+                : $"{bookName} {chapter}:{verse}-{endVerse}";
+            yield return new VerseReference(display, bookName, chapter, verse, endVerse);
+        }
+    }
+
     private static bool HasVisibleText(TextBlock textBlock)
     {
-        return !string.IsNullOrWhiteSpace(textBlock.Text);
+        return !string.IsNullOrWhiteSpace(textBlock.Text) || textBlock.Inlines.Count > 0;
     }
 
     private void SetStrongsDefinitionDocument(string? meaning)
@@ -10577,7 +11078,7 @@ public partial class MainWindow : Window
 
     private void AddDefinitionRunsWithReferences(Paragraph paragraph, string text, double fontSize, FontWeight fontWeight)
     {
-        const string referencePattern = @"(?<![A-Za-z0-9])(?<book>[1-3]?[A-Za-z]{2,4})\.(?<chapter>\d{1,3}):(?<verse>\d{1,3})(?![A-Za-z0-9])";
+        const string referencePattern = @"(?<![A-Za-z0-9])(?<book>[1-3]?[A-Za-z]{2,4})\.(?<chapter>\d{1,3}):(?<verse>\d{1,3})(?:-(?<endVerse>\d{1,3}))?(?![A-Za-z0-9])";
         var cursor = 0;
         foreach (Match match in Regex.Matches(text, referencePattern, RegexOptions.CultureInvariant))
         {
@@ -10629,7 +11130,7 @@ public partial class MainWindow : Window
 
     private static bool TryCreateVerseReference(Match match, out VerseReference reference)
     {
-        reference = new VerseReference(string.Empty, string.Empty, 0, 0);
+        reference = new VerseReference(string.Empty, string.Empty, 0, 0, 0);
         if (!TryMapTagntBookCode(match.Groups["book"].Value, out var bookName)
             || !int.TryParse(match.Groups["chapter"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var chapter)
             || !int.TryParse(match.Groups["verse"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var verse))
@@ -10637,7 +11138,14 @@ public partial class MainWindow : Window
             return false;
         }
 
-        reference = new VerseReference(match.Value, bookName, chapter, verse);
+        var endVerse = verse;
+        if (match.Groups["endVerse"].Success
+            && int.TryParse(match.Groups["endVerse"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedEndVerse))
+        {
+            endVerse = Math.Max(verse, parsedEndVerse);
+        }
+
+        reference = new VerseReference(match.Value, bookName, chapter, verse, endVerse);
         return true;
     }
 
@@ -11001,6 +11509,489 @@ public partial class MainWindow : Window
             CompositionTarget.Rendering -= PanelDrag_Rendering;
             _panelDragRenderSubscribed = false;
         }
+    }
+
+    private void PanelLayoutButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentStudy is null || StudyPanel.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        EnsureVisibleExtraPanelsRenderedForOrganizer();
+        RefreshPanelOrganizer();
+        PanelOrganizerPopup.IsOpen = true;
+    }
+
+    private void ClosePanelOrganizer_Click(object sender, RoutedEventArgs e)
+    {
+        PanelOrganizerPopup.IsOpen = false;
+    }
+
+    private void RefreshPanelOrganizer()
+    {
+        var panels = GetVisibleStudyPanels();
+        var count = panels.Count;
+        PanelLayoutCountText.Text = count.ToString(CultureInfo.InvariantCulture);
+        PanelLayoutSummaryText.Text = count == 1
+            ? "1 panel is open. Its position and size belong only to this study."
+            : $"{count} panels are open. Applying a layout saves every position to this study.";
+        PanelLayoutInventoryText.Text = panels.Count == 0
+            ? "No panels detected"
+            : $"Included: {string.Join("  |  ", panels.Select(panel => panel.Title))}";
+        PanelLayoutOptionsHost.Children.Clear();
+
+        foreach (var choice in GetStudyPanelLayoutChoices(count))
+        {
+            var button = new Button
+            {
+                Tag = choice.Layout,
+                Style = (Style)FindResource("ChromeButtonStyle"),
+                Background = GetResourceBrush(choice.Recommended ? "PanelBackground" : "AppBackground"),
+                BorderBrush = GetResourceBrush(choice.Recommended ? "Mint" : "StrokeSoft"),
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                Padding = new Thickness(10),
+                Margin = new Thickness(0, 0, 0, 9),
+                Cursor = Cursors.Hand
+            };
+            button.Click += PanelLayoutOption_Click;
+
+            var content = new Grid();
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            content.Children.Add(CreatePanelLayoutPreview(choice.Layout, Math.Max(1, count)));
+
+            var labels = new StackPanel { Margin = new Thickness(10, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+            labels.Children.Add(new TextBlock
+            {
+                Text = choice.Title,
+                Foreground = GetResourceBrush("TextPrimary"),
+                FontSize = 14,
+                FontWeight = FontWeights.Black
+            });
+            labels.Children.Add(new TextBlock
+            {
+                Text = choice.Description,
+                Foreground = GetResourceBrush("TextSecondary"),
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 3, 0, 0),
+                TextWrapping = TextWrapping.Wrap
+            });
+            Grid.SetColumn(labels, 1);
+            content.Children.Add(labels);
+
+            if (choice.Recommended)
+            {
+                var badge = new Border
+                {
+                    Background = GetResourceBrush("Mint"),
+                    CornerRadius = new CornerRadius(8),
+                    Padding = new Thickness(7, 3, 7, 3),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Child = new TextBlock
+                    {
+                        Text = "BEST FIT",
+                        Foreground = GetResourceBrush("AppBackground"),
+                        FontSize = 9,
+                        FontWeight = FontWeights.Black
+                    }
+                };
+                Grid.SetColumn(badge, 2);
+                content.Children.Add(badge);
+            }
+
+            button.Content = content;
+            PanelLayoutOptionsHost.Children.Add(button);
+        }
+    }
+
+    private void UpdatePanelLayoutButtonCount()
+    {
+        if (PanelLayoutCountText is null)
+        {
+            return;
+        }
+
+        PanelLayoutCountText.Text = GetVisibleStudyPanels().Count.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private IReadOnlyList<StudyPanelLayoutChoice> GetStudyPanelLayoutChoices(int count)
+    {
+        var landscape = StudyPanel.ActualWidth >= StudyPanel.ActualHeight;
+        return count switch
+        {
+            <= 1 =>
+            [
+                new StudyPanelLayoutChoice(StudyPanelLayout.Fill, "Focus", "Use the full study workspace.", true),
+                new StudyPanelLayoutChoice(StudyPanelLayout.Center, "Comfortable float", "Keep one roomy panel centered.")
+            ],
+            2 => landscape
+                ?
+                [
+                    new StudyPanelLayoutChoice(StudyPanelLayout.Columns, "Side by side", "Give both panels equal width.", true),
+                    new StudyPanelLayoutChoice(StudyPanelLayout.Rows, "Stacked", "Give both panels equal height.")
+                ]
+                :
+                [
+                    new StudyPanelLayoutChoice(StudyPanelLayout.Rows, "Stacked", "Give both panels equal height.", true),
+                    new StudyPanelLayoutChoice(StudyPanelLayout.Columns, "Side by side", "Give both panels equal width.")
+                ],
+            3 => landscape
+                ?
+                [
+                    new StudyPanelLayoutChoice(StudyPanelLayout.MainLeft, "Main + right stack", "Keep the editor large and stack the other two.", true),
+                    new StudyPanelLayoutChoice(StudyPanelLayout.Columns, "Three columns", "Give every panel equal width."),
+                    new StudyPanelLayoutChoice(StudyPanelLayout.MainTop, "Main + bottom row", "Keep the editor wide above the other panels.")
+                ]
+                :
+                [
+                    new StudyPanelLayoutChoice(StudyPanelLayout.MainTop, "Main + bottom row", "Keep the editor large above the other two.", true),
+                    new StudyPanelLayoutChoice(StudyPanelLayout.MainLeft, "Main + right stack", "Keep the editor tall beside the other panels."),
+                    new StudyPanelLayoutChoice(StudyPanelLayout.Grid, "Compact grid", "Balance all three panels.")
+                ],
+            4 =>
+            [
+                new StudyPanelLayoutChoice(StudyPanelLayout.Grid, "2 x 2 grid", "Balance all four panels without overlap.", true),
+                new StudyPanelLayoutChoice(StudyPanelLayout.MainLeft, "Main + sidebar stack", "Keep the editor large and stack supporting panels."),
+                new StudyPanelLayoutChoice(StudyPanelLayout.MainTop, "Main + lower strip", "Keep the editor wide above supporting panels.")
+            ],
+            _ =>
+            [
+                new StudyPanelLayoutChoice(StudyPanelLayout.Grid, "Balanced grid", $"Fit all {count} panels without overlap.", true),
+                new StudyPanelLayoutChoice(landscape ? StudyPanelLayout.MainLeft : StudyPanelLayout.MainTop,
+                    landscape ? "Main + sidebar stack" : "Main + lower strip",
+                    "Keep the editor dominant and organize everything else around it."),
+                new StudyPanelLayoutChoice(StudyPanelLayout.Cascade, "Cascade", "Overlap panels in a reachable deck for quick switching.")
+            ]
+        };
+    }
+
+    private Canvas CreatePanelLayoutPreview(StudyPanelLayout layout, int count)
+    {
+        const double width = 54;
+        const double height = 38;
+        var canvas = new Canvas
+        {
+            Width = width,
+            Height = height,
+            Background = GetResourceBrush("TextPrimary"),
+            ClipToBounds = true
+        };
+        var rectangles = CalculateStudyPanelLayout(layout, count, width, height, 2, 2);
+        var fills = new[] { "Mint", "Coral", "Gold", "Sky", "Violet", "TextSecondary" };
+        for (var index = 0; index < rectangles.Count; index++)
+        {
+            var rect = rectangles[index];
+            var cell = new Border
+            {
+                Width = rect.Width,
+                Height = rect.Height,
+                Background = GetResourceBrush(fills[index % fills.Length]),
+                BorderBrush = GetResourceBrush("AppBackground"),
+                BorderThickness = new Thickness(0.7),
+                CornerRadius = new CornerRadius(1.5)
+            };
+            Canvas.SetLeft(cell, rect.Left);
+            Canvas.SetTop(cell, rect.Top);
+            canvas.Children.Add(cell);
+        }
+
+        return canvas;
+    }
+
+    private void PanelLayoutOption_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: StudyPanelLayout layout })
+        {
+            return;
+        }
+
+        ApplyStudyPanelLayout(layout);
+        PanelOrganizerPopup.IsOpen = false;
+    }
+
+    private List<VisibleStudyPanel> GetVisibleStudyPanels()
+    {
+        var panels = new List<VisibleStudyPanel>();
+        if (_currentStudy is not null && StudyPanel.Visibility == Visibility.Visible)
+        {
+            panels.Add(new VisibleStudyPanel("editor", "Main notes", StudyEditorPanelRoot, StudyEditorPanelDragTransform, MovablePanelKind.Editor, null));
+        }
+
+        if (_currentStudy is not null)
+        {
+            foreach (var state in _currentStudy.ExtraPanels.Where(panel =>
+                         panel.Kind == ExtraStudyPanelKind.Notes && panel.IsVisible != false))
+            {
+                if (_extraPanelRuntimes.TryGetValue(state.Id, out var runtime))
+                {
+                    panels.Add(new VisibleStudyPanel(
+                        state.Id,
+                        string.IsNullOrWhiteSpace(state.Title) ? "Notes" : state.Title,
+                        runtime.Root,
+                        runtime.Transform,
+                        null,
+                        state));
+                }
+            }
+        }
+
+        if (ScripturePanelRoot.Visibility == Visibility.Visible)
+        {
+            panels.Add(new VisibleStudyPanel("scripture", "Scripture", ScripturePanelRoot, ScripturePanelDragTransform, MovablePanelKind.Scripture, null));
+        }
+        if (StrongsPanelRoot.Visibility == Visibility.Visible)
+        {
+            panels.Add(new VisibleStudyPanel("strongs", "Strong's", StrongsPanelRoot, StrongsPanelDragTransform, MovablePanelKind.Strongs, null));
+        }
+
+        if (_currentStudy is not null)
+        {
+            foreach (var state in _currentStudy.ExtraPanels.Where(panel =>
+                         panel.Kind != ExtraStudyPanelKind.Notes && panel.IsVisible != false))
+            {
+                if (_extraPanelRuntimes.TryGetValue(state.Id, out var runtime)
+                    && runtime.Root.Visibility == Visibility.Visible)
+                {
+                    var title = string.IsNullOrWhiteSpace(state.Title)
+                        ? state.Kind == ExtraStudyPanelKind.Chat ? "Local study chat" : "Scripture panel"
+                        : state.Title;
+                    panels.Add(new VisibleStudyPanel(state.Id, title, runtime.Root, runtime.Transform, null, state));
+                }
+            }
+        }
+
+        return panels;
+    }
+
+    private void EnsureVisibleExtraPanelsRenderedForOrganizer()
+    {
+        if (_currentStudy is null)
+        {
+            return;
+        }
+
+        foreach (var state in _currentStudy.ExtraPanels
+                     .Where(panel => panel.IsVisible != false)
+                     .Where(panel => !_extraPanelRuntimes.ContainsKey(panel.Id))
+                     .ToList())
+        {
+            RenderExtraStudyPanel(state, animate: false);
+        }
+    }
+
+    private void ApplyStudyPanelLayout(StudyPanelLayout layout)
+    {
+        if (_currentStudy is null)
+        {
+            return;
+        }
+
+        CompleteExtraPanelDrag(save: false);
+        CompleteExtraPanelResize(save: false);
+        EnsureVisibleExtraPanelsRenderedForOrganizer();
+        var panels = GetVisibleStudyPanels();
+        if (panels.Count == 0)
+        {
+            return;
+        }
+
+        var width = Math.Max(1, StudyPanel.ActualWidth);
+        var height = Math.Max(1, StudyPanel.ActualHeight);
+        var targets = CalculateStudyPanelLayout(layout, panels.Count, width, height, 12, 12);
+        var wasRestoring = _isRestoringStudyPanelGeometry;
+        _isRestoringStudyPanelGeometry = true;
+        try
+        {
+            for (var index = 0; index < panels.Count; index++)
+            {
+                ApplyVisibleStudyPanelBounds(panels[index], targets[index]);
+                Panel.SetZIndex(panels[index].Root, ++_topPanelZIndex);
+                panels[index].Root.BeginAnimation(OpacityProperty, new DoubleAnimation(0.76, 1, TimeSpan.FromMilliseconds(210))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                });
+            }
+
+            SnapshotCurrentStudyPanelGeometry();
+            ClampExtraPanelsToStudyArea(save: false);
+            UpdateEditorAvoidanceForPanels(animate: false);
+        }
+        finally
+        {
+            _isRestoringStudyPanelGeometry = wasRestoring;
+        }
+
+        SaveWorkspaceState();
+        UpdatePanelLayoutButtonCount();
+        ShowToast($"Arranged {panels.Count} {(panels.Count == 1 ? "panel" : "panels")} for this study.");
+    }
+
+    private void ApplyVisibleStudyPanelBounds(VisibleStudyPanel panel, Rect target)
+    {
+        var geometry = new PanelGeometryState
+        {
+            X = Math.Round(target.Left, 2),
+            Y = Math.Round(target.Top, 2),
+            Width = Math.Round(target.Width, 2),
+            Height = Math.Round(target.Height, 2)
+        };
+
+        if (panel.PrimaryKind is { } kind)
+        {
+            ApplySavedPanelGeometry(kind, geometry);
+            switch (kind)
+            {
+                case MovablePanelKind.Editor:
+                    _currentStudy!.EditorPanelGeometry = geometry;
+                    break;
+                case MovablePanelKind.Scripture:
+                    _currentStudy!.ScripturePanelGeometry = geometry;
+                    break;
+                case MovablePanelKind.Strongs:
+                    _currentStudy!.StrongsPanelGeometry = geometry;
+                    break;
+            }
+            return;
+        }
+
+        panel.Root.BeginAnimation(FrameworkElement.WidthProperty, null);
+        panel.Root.BeginAnimation(FrameworkElement.HeightProperty, null);
+        panel.Transform.BeginAnimation(TranslateTransform.XProperty, null);
+        panel.Transform.BeginAnimation(TranslateTransform.YProperty, null);
+        panel.Root.Width = geometry.Width;
+        panel.Root.Height = geometry.Height;
+        panel.Transform.X = geometry.X;
+        panel.Transform.Y = geometry.Y;
+        if (panel.ExtraState is not null)
+        {
+            panel.ExtraState.Geometry = geometry;
+        }
+    }
+
+    private static List<Rect> CalculateStudyPanelLayout(
+        StudyPanelLayout layout,
+        int count,
+        double width,
+        double height,
+        double edge,
+        double gap)
+    {
+        count = Math.Max(1, count);
+        var innerWidth = Math.Max(1, width - edge * 2);
+        var innerHeight = Math.Max(1, height - edge * 2);
+        var result = new List<Rect>(count);
+
+        Rect CreateCell(int column, int row, int columns, int rows)
+        {
+            var cellWidth = Math.Max(1, (innerWidth - gap * (columns - 1)) / columns);
+            var cellHeight = Math.Max(1, (innerHeight - gap * (rows - 1)) / rows);
+            return new Rect(
+                edge + column * (cellWidth + gap),
+                edge + row * (cellHeight + gap),
+                cellWidth,
+                cellHeight);
+        }
+
+        switch (layout)
+        {
+            case StudyPanelLayout.Fill:
+                result.Add(new Rect(edge, edge, innerWidth, innerHeight));
+                break;
+            case StudyPanelLayout.Center:
+            {
+                var panelWidth = innerWidth * 0.78;
+                var panelHeight = innerHeight * 0.82;
+                result.Add(new Rect((width - panelWidth) / 2, (height - panelHeight) / 2, panelWidth, panelHeight));
+                break;
+            }
+            case StudyPanelLayout.Columns:
+                for (var index = 0; index < count; index++)
+                {
+                    result.Add(CreateCell(index, 0, count, 1));
+                }
+                break;
+            case StudyPanelLayout.Rows:
+                for (var index = 0; index < count; index++)
+                {
+                    result.Add(CreateCell(0, index, 1, count));
+                }
+                break;
+            case StudyPanelLayout.MainLeft:
+            {
+                var mainWidth = Math.Max(1, innerWidth * 0.58);
+                result.Add(new Rect(edge, edge, mainWidth, innerHeight));
+                var sideCount = Math.Max(1, count - 1);
+                var sideX = edge + mainWidth + gap;
+                var sideWidth = Math.Max(1, width - edge - sideX);
+                var sideHeight = Math.Max(1, (innerHeight - gap * (sideCount - 1)) / sideCount);
+                for (var index = 0; index < sideCount; index++)
+                {
+                    result.Add(new Rect(sideX, edge + index * (sideHeight + gap), sideWidth, sideHeight));
+                }
+                break;
+            }
+            case StudyPanelLayout.MainTop:
+            {
+                var mainHeight = Math.Max(1, innerHeight * 0.58);
+                result.Add(new Rect(edge, edge, innerWidth, mainHeight));
+                var lowerCount = Math.Max(1, count - 1);
+                var lowerY = edge + mainHeight + gap;
+                var lowerHeight = Math.Max(1, height - edge - lowerY);
+                var lowerWidth = Math.Max(1, (innerWidth - gap * (lowerCount - 1)) / lowerCount);
+                for (var index = 0; index < lowerCount; index++)
+                {
+                    result.Add(new Rect(edge + index * (lowerWidth + gap), lowerY, lowerWidth, lowerHeight));
+                }
+                break;
+            }
+            case StudyPanelLayout.Cascade:
+            {
+                var offset = Math.Min(34, Math.Max(12, Math.Min(innerWidth, innerHeight) * 0.08));
+                var panelWidth = Math.Max(1, innerWidth - offset * (count - 1));
+                var panelHeight = Math.Max(1, innerHeight - offset * (count - 1));
+                panelWidth = Math.Max(panelWidth, innerWidth * 0.62);
+                panelHeight = Math.Max(panelHeight, innerHeight * 0.68);
+                for (var index = 0; index < count; index++)
+                {
+                    var x = Math.Min(edge + index * offset, width - edge - panelWidth);
+                    var y = Math.Min(edge + index * offset, height - edge - panelHeight);
+                    result.Add(new Rect(Math.Max(edge, x), Math.Max(edge, y), panelWidth, panelHeight));
+                }
+                break;
+            }
+            default:
+            {
+                var columns = width >= height * 1.15
+                    ? Math.Min(count, Math.Max(2, (int)Math.Ceiling(Math.Sqrt(count * 1.35))))
+                    : Math.Min(count, Math.Max(2, (int)Math.Ceiling(Math.Sqrt(count))));
+                var rows = (int)Math.Ceiling(count / (double)columns);
+                for (var row = 0; row < rows; row++)
+                {
+                    var remaining = count - row * columns;
+                    var columnsInRow = Math.Min(columns, remaining);
+                    var rowWidth = Math.Max(1, (innerWidth - gap * (columnsInRow - 1)) / columnsInRow);
+                    var rowHeight = Math.Max(1, (innerHeight - gap * (rows - 1)) / rows);
+                    for (var column = 0; column < columnsInRow; column++)
+                    {
+                        result.Add(new Rect(
+                            edge + column * (rowWidth + gap),
+                            edge + row * (rowHeight + gap),
+                            rowWidth,
+                            rowHeight));
+                    }
+                }
+                break;
+            }
+        }
+
+        while (result.Count < count)
+        {
+            result.Add(new Rect(edge, edge, innerWidth, innerHeight));
+        }
+        return result.Take(count).ToList();
     }
 
     private void ShowPanelPresetOverlay()
@@ -12140,6 +13131,7 @@ public partial class MainWindow : Window
                 StrongsPanelRoot.Opacity = 0;
                 UpdateEditorAvoidanceForPanels(animate: true);
             }
+            UpdatePanelLayoutButtonCount();
         };
 
         StrongsColumn.BeginAnimation(ColumnDefinition.WidthProperty, widthAnimation);
@@ -12251,6 +13243,7 @@ public partial class MainWindow : Window
                 });
                 Dispatcher.BeginInvoke(() => UpdateEditorAvoidanceForPanels(animate: false), DispatcherPriority.Render);
             }
+            UpdatePanelLayoutButtonCount();
         };
 
         ScriptureColumn.BeginAnimation(ColumnDefinition.WidthProperty, widthAnimation);
@@ -13006,6 +13999,8 @@ public sealed class WorkspaceState
 
     public string SelectedBibleVersion { get; set; } = "NASB1995";
 
+    public bool StrongsAdvancedModeEnabled { get; set; }
+
     public WindowPlacementState? WindowPlacement { get; set; }
 }
 
@@ -13718,7 +14713,9 @@ public sealed record GreekLexiconEntry(
     string Transliteration,
     string Morph,
     string Gloss,
-    string Meaning);
+    string Meaning,
+    string EnglishMeanings,
+    string ReferenceTargets);
 
 public sealed class BibleTranslationFile
 {
