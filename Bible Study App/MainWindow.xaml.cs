@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
@@ -369,6 +369,7 @@ public partial class MainWindow : Window
         AiModelComboBox.ItemsSource = _availableAiModels;
         MemoryPassageItems.ItemsSource = _scriptureMemoryItems;
         LoadWorkspaceState();
+        ApplyScriptureTheme(false);
         StrongsAdvancedToggle.IsChecked = _strongsAdvancedModeEnabled;
         LoadScriptureText();
         RefreshSavedMemoryPassageTranslations();
@@ -592,6 +593,7 @@ public partial class MainWindow : Window
             NewTestamentBooksExpander.IsExpanded = state.NewTestamentBooksExpanded;
             LoadReminderSettings(state.ReminderSettings);
             LoadColorSettings(state.ColorSettings);
+            _scriptureDarkMode = state.ScriptureDarkMode;
         }
         catch
         {
@@ -808,6 +810,7 @@ public partial class MainWindow : Window
                 NewTestamentBooksExpanded = NewTestamentBooksExpander.IsExpanded,
                 ReminderSettings = CreateReminderSettingsState(),
                 ColorSettings = CreateColorSettingsState(),
+                ScriptureDarkMode = _scriptureDarkMode,
                 SelectedBibleVersion = _selectedBibleVersion,
                 StrongsAdvancedModeEnabled = _strongsAdvancedModeEnabled,
                 WindowPlacement = CreateWindowPlacementState()
@@ -5866,11 +5869,70 @@ public partial class MainWindow : Window
         Canvas.SetTop(ScriptureSelectionMarker, markerTop);
     }
 
+    private bool _scriptureDarkMode;
+
+    private SolidColorBrush ScriptureBrush(string key) => (SolidColorBrush)ScripturePanelRoot.Resources[key];
+
+    private void ScriptureThemeToggle_Click(object sender, RoutedEventArgs e)
+    {
+        _scriptureDarkMode = ScriptureThemeToggle.IsChecked == true;
+        ApplyScriptureTheme(true);
+        SaveWorkspaceState();
+    }
+
+    private void ApplyScriptureTheme(bool animate)
+    {
+        // Mutable panel-scoped brushes also update the existing document without losing selection or scroll position.
+        var colors = new (string Key, string Light, string Dark)[]
+        {
+            ("ScriptureSurface", "#FAFAF7", "#171C24"),
+            ("ScriptureInk", "#20252B", "#EEF2F6"),
+            ("ScriptureMuted", "#515C68", "#B7C2CF"),
+            ("ScriptureBorder", "#77818D", "#8390A0"),
+            ("ScriptureHighlight", "#D4E6D5", "#304B42"),
+            ("ScriptureLink", "#8A3545", "#FFB5C0"),
+            ("ScriptureLinkAlt", "#236345", "#98DBB5"),
+            ("AppBackground", "#E5E9ED", "#303B49"),
+            ("PanelBackground", "#CDD5DD", "#435165"),
+            ("TextPrimary", "#20252B", "#EEF2F6"),
+            ("Mint", "#A5C8B2", "#A5C8B2")
+        };
+        var duration = TimeSpan.FromMilliseconds(animate && SystemParameters.ClientAreaAnimation ? 180 : 0);
+        foreach (var (key, light, dark) in colors)
+        {
+            var brush = ScriptureBrush(key);
+            var replaceResource = brush.IsFrozen;
+            if (replaceResource)
+                brush = brush.CloneCurrentValue();
+            var color = (Color)ColorConverter.ConvertFromString(_scriptureDarkMode ? dark : light);
+            var previous = brush.Color;
+            // A style can freeze a resource as soon as it is published. Keep a binding
+            // expression on Color so WPF cannot freeze this shared, animated brush.
+            System.Windows.Data.BindingOperations.SetBinding(brush, SolidColorBrush.ColorProperty,
+                new System.Windows.Data.Binding { Source = color, Mode = System.Windows.Data.BindingMode.OneWay });
+            if (replaceResource)
+                ScripturePanelRoot.Resources[key] = brush;
+            brush.BeginAnimation(SolidColorBrush.ColorProperty, null);
+            if (duration > TimeSpan.Zero)
+                brush.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(previous, color, duration) { FillBehavior = FillBehavior.Stop });
+        }
+        ScriptureThemeToggle.IsChecked = _scriptureDarkMode;
+        ScriptureThemeToggle.ToolTip = _scriptureDarkMode ? "Switch scripture panel to light mode" : "Switch scripture panel to dark mode";
+        ScriptureThemeToggle.ApplyTemplate();
+        var template = ScriptureThemeToggle.Template;
+        if (template.FindName("ThemeThumbOffset", ScriptureThemeToggle) is TranslateTransform offset)
+            offset.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(_scriptureDarkMode ? 20 : 0, duration));
+        if (template.FindName("ThemeSun", ScriptureThemeToggle) is UIElement sun)
+            sun.BeginAnimation(OpacityProperty, new DoubleAnimation(_scriptureDarkMode ? 0 : 1, duration));
+        if (template.FindName("ThemeMoon", ScriptureThemeToggle) is UIElement moon)
+            moon.BeginAnimation(OpacityProperty, new DoubleAnimation(_scriptureDarkMode ? 1 : 0, duration));
+    }
+
     private void RenderScriptureDocument()
     {
         _scriptureParagraphsByVerse.Clear();
         ScriptureDocument.Blocks.Clear();
-        ScriptureDocument.Foreground = new SolidColorBrush(Color.FromRgb(17, 17, 17));
+        ScriptureDocument.Foreground = ScriptureBrush("ScriptureInk");
         ScriptureDocument.FontSize = ScriptureFontSizeSlider.Value;
 
         foreach (var verse in _scriptureVerses)
@@ -5915,9 +5977,9 @@ public partial class MainWindow : Window
             {
                 Margin = new Thickness(6, 18, 6, 4),
                 Padding = new Thickness(0, 12, 0, 0),
-                BorderBrush = GetResourceBrush("PanelBackground"),
+                BorderBrush = ScriptureBrush("ScriptureBorder"),
                 BorderThickness = new Thickness(0, 1, 0, 0),
-                Foreground = GetResourceBrush("PanelBackground"),
+                Foreground = ScriptureBrush("ScriptureMuted"),
                 FontSize = 10,
                 LineHeight = 15
             });
@@ -5973,9 +6035,9 @@ public partial class MainWindow : Window
     {
         return (index % 3) switch
         {
-            0 => GetResourceBrush("Coral"),
-            1 => GetResourceBrush("PanelBackground"),
-            _ => GetResourceBrush("Mint")
+            0 => ScriptureBrush("ScriptureLink"),
+            1 => ScriptureBrush("ScriptureInk"),
+            _ => ScriptureBrush("ScriptureLinkAlt")
         };
     }
 
@@ -6048,18 +6110,7 @@ public partial class MainWindow : Window
             return Brushes.Transparent;
         }
 
-        var targetColor = GetResourceBrush("Mint") is SolidColorBrush mintBrush
-            ? mintBrush.Color
-            : Color.FromRgb(221, 161, 94);
-        var brush = new SolidColorBrush(Color.FromArgb(0, targetColor.R, targetColor.G, targetColor.B));
-        brush.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(
-            brush.Color,
-            targetColor,
-            TimeSpan.FromMilliseconds(220))
-        {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        });
-        return brush;
+        return ScriptureBrush("ScriptureHighlight");
     }
 
     private async void EndStudyNotification_Click(object sender, RoutedEventArgs e)
@@ -13981,6 +14032,8 @@ public sealed class GridLengthAnimation : AnimationTimeline
 
 public sealed class WorkspaceState
 {
+    public bool ScriptureDarkMode { get; set; }
+
     public List<WorkspaceItemState> Books { get; set; } = new();
 
     public List<DailyNoteState> DailyNotes { get; set; } = new();
